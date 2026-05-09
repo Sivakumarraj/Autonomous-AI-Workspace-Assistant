@@ -1,62 +1,119 @@
-# Dependencies
-node_modules/
+# ============================================
+# AI Workspace Automation - .gitignore
+# ============================================
+
+# -------------------- #
+#   Node.js / Frontend  #
+# -------------------- #
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/.turbo/
+
+# -------------------- #
+#   Python / Backend    #
+# -------------------- #
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 *.pyo
+*.pyd
+.Python
+*.egg-info/
+*.egg
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
 venv/
 .venv/
 env/
+ENV/
 
-# Build
-.next/
-out/
-dist/
-build/
-*.egg-info/
-
-# Environment
-.env
+# -------------------- #
+#   Environment Files   #
+# -------------------- #
+# Contains API keys (OpenAI, Gemini, Anthropic) - NEVER commit
+backend/.env
 .env.local
+.env.development
 .env.production
-!backend/.env
+.env.staging
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-logs/*.log
-*.log
-
-# Uploads (keep directory structure)
+# -------------------- #
+#   User Uploads        #
+# -------------------- #
+# Uploaded files - user data, never commit
 uploads/pdfs/*
 uploads/docs/*
 uploads/images/*
 uploads/temp/*
+backend/uploads/*
+
+# Keep the directory structure
 !uploads/pdfs/.gitkeep
 !uploads/docs/.gitkeep
 !uploads/images/.gitkeep
 !uploads/temp/.gitkeep
 
-# Vector store data
+# -------------------- #
+#   Vector Store Data   #
+# -------------------- #
+# Embedding data - generated, not source code
 vector_store/*
 !vector_store/.gitkeep
 
-# Database
+# ChromaDB data
+chroma_data/
+*.chromadb
+
+# -------------------- #
+#   Log Files           #
+# -------------------- #
+logs/api_logs/*
+logs/workflow_logs/*
+logs/error_logs/*
+logs/*.log
+
+# Keep the directory structure
+!logs/api_logs/.gitkeep
+!logs/workflow_logs/.gitkeep
+!logs/error_logs/.gitkeep
+
+# -------------------- #
+#   Database Files      #
+# -------------------- #
 *.db
 *.sqlite3
-node_modules/
-.next/
-.env
-.env.local
-__pycache__/
-uploads/
-vector_store/
-logs/
+*.sqlite
+
+# -------------------- #
+#   IDE / Editor        #
+# -------------------- #
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# -------------------- #
+#   OS Generated        #
+# -------------------- #
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# -------------------- #
+#   Build / Misc        #
+# -------------------- #
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
