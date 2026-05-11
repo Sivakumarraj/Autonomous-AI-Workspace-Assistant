@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.services.gemini_service import generate_response
+from app.rag.retrieval import retrieve_relevant_chunks
 
 router = APIRouter()
 
@@ -13,8 +13,11 @@ class ChatRequest(BaseModel):
 @router.post("/chat")
 async def chat(request: ChatRequest):
 
-    reply = await generate_response(request.message)
+    chunks = retrieve_relevant_chunks(
+        request.message
+    )
 
     return {
-        "response": reply
+        "question": request.message,
+        "retrieved_chunks": chunks
     }
