@@ -8,7 +8,6 @@ def extract_text_from_pdf(file_path: str):
     text = ""
 
     for page in reader.pages:
-
         extracted = page.extract_text()
 
         if extracted:

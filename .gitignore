@@ -1,119 +1,62 @@
-# ============================================
-# AI Workspace Automation - .gitignore
-# ============================================
-
-# -------------------- #
-#   Node.js / Frontend  #
-# -------------------- #
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/dist/
-frontend/.turbo/
-
-# -------------------- #
-#   Python / Backend    #
-# -------------------- #
+# Dependencies
+node_modules/
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
 *.pyo
-*.pyd
-.Python
-*.egg-info/
-*.egg
-*.whl
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Virtual environments
 venv/
 .venv/
 env/
-ENV/
 
-# -------------------- #
-#   Environment Files   #
-# -------------------- #
-# Contains API keys (OpenAI, Gemini, Anthropic) - NEVER commit
-backend/.env
+# Build
+.next/
+out/
+dist/
+build/
+*.egg-info/
+
+# Environment
+.env
 .env.local
-.env.development
 .env.production
-.env.staging
+!backend/.env
 
-# -------------------- #
-#   User Uploads        #
-# -------------------- #
-# Uploaded files - user data, never commit
-uploads/pdfs/*
-uploads/docs/*
-uploads/images/*
-uploads/temp/*
-backend/uploads/*
-
-# Keep the directory structure
-!uploads/pdfs/.gitkeep
-!uploads/docs/.gitkeep
-!uploads/images/.gitkeep
-!uploads/temp/.gitkeep
-
-# -------------------- #
-#   Vector Store Data   #
-# -------------------- #
-# Embedding data - generated, not source code
-vector_store/*
-!vector_store/.gitkeep
-
-# ChromaDB data
-chroma_data/
-*.chromadb
-
-# -------------------- #
-#   Log Files           #
-# -------------------- #
-logs/api_logs/*
-logs/workflow_logs/*
-logs/error_logs/*
-logs/*.log
-
-# Keep the directory structure
-!logs/api_logs/.gitkeep
-!logs/workflow_logs/.gitkeep
-!logs/error_logs/.gitkeep
-
-# -------------------- #
-#   Database Files      #
-# -------------------- #
-*.db
-*.sqlite3
-*.sqlite
-
-# -------------------- #
-#   IDE / Editor        #
-# -------------------- #
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-*.sublime-project
-*.sublime-workspace
 
-# -------------------- #
-#   OS Generated        #
-# -------------------- #
+# OS
 .DS_Store
-.DS_Store?
 Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
 
-# -------------------- #
-#   Build / Misc        #
-# -------------------- #
-build/
-dist/
-*.tsbuildinfo
-next-env.d.ts
+# Logs
+logs/*.log
+*.log
+
+# Uploads (keep directory structure)
+uploads/pdfs/*
+uploads/docs/*
+uploads/images/*
+uploads/temp/*
+!uploads/pdfs/.gitkeep
+!uploads/docs/.gitkeep
+!uploads/images/.gitkeep
+!uploads/temp/.gitkeep
+
+# Vector store data
+vector_store/*
+!vector_store/.gitkeep
+
+# Database
+*.db
+*.sqlite3
+node_modules/
+.next/
+.env
+.env.local
+__pycache__/
+uploads/
+vector_store/
+logs/
