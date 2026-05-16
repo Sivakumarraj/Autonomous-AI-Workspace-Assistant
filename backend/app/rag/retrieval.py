@@ -1,5 +1,12 @@
+import chromadb
+
 from app.services.embedding_service import generate_embedding
-from app.services.vector_service import collection
+
+client = chromadb.PersistentClient(path="vector_store")
+
+collection = client.get_or_create_collection(
+    name="documents"
+)
 
 
 def retrieve_relevant_chunks(query: str, top_k: int = 3):

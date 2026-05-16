@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.routes.files import router as files_router
 from app.api.routes.chat import router as chat_router
+from app.api.routes.memory import router as memory_router
 
 app = FastAPI()
 
@@ -15,4 +17,4 @@ app.add_middleware(
 
 app.include_router(chat_router)
 app.include_router(files_router)
-
+app.include_router(memory_router, prefix="/memory", tags=["memory"])

@@ -1,22 +1,51 @@
-"""Workspace memory - persistent facts about the workspace"""
-
-from typing import List, Dict, Any
+from datetime import datetime
 
 
 class WorkspaceMemory:
+    def search_memories(self, query):
+
+        query = query.lower()
+
+        results = []
+
+        for fact in self.facts:
+
+            if any(
+                word in fact["content"].lower()
+                for word in query.split()
+            ):
+                results.append(fact)
+
+        return results          
+        
     def __init__(self):
-        self.facts: List[Dict[str, Any]] = []
+        self.facts = []
+        
+    def add_fact(self, category, content, source):
 
-    def add_fact(self, category: str, content: str, source: str):
-        self.facts.append({"category": category, "content": content, "source": source})
+        memory = {
+            "id": str(len(self.facts) + 1),
+            "category": category,
+            "content": content,
+            "source": source,
+            "created_at": datetime.now().strftime("%m/%d/%Y"),
+            "icon": "📁"
+        }
 
-    def get_facts(self, category: str = None) -> List[Dict[str, Any]]:
-        if category:
-            return [f for f in self.facts if f["category"] == category]
+        self.facts.append(memory)
+
+        return memory
+
+    def get_facts(self):
+
         return self.facts
 
-    def search(self, query: str) -> List[Dict[str, Any]]:
-        return [f for f in self.facts if query.lower() in f["content"].lower()]
+    def delete_fact(self, memory_id):
+
+        self.facts = [
+            fact for fact in self.facts
+            if fact["id"] != memory_id
+        ]
 
 
 workspace_memory = WorkspaceMemory()

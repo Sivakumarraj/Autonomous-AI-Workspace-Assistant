@@ -1,4 +1,5 @@
 import chromadb
+import uuid
 
 client = chromadb.PersistentClient(path="vector_store")
 
@@ -9,12 +10,10 @@ collection = client.get_or_create_collection(
 
 def store_embeddings(chunks, embeddings):
 
-    for index, (chunk, embedding) in enumerate(
-        zip(chunks, embeddings)
-    ):
+    for chunk, embedding in zip(chunks, embeddings):
 
         collection.add(
             documents=[chunk],
             embeddings=[embedding],
-            ids=[f"doc_{index}"]
+            ids=[str(uuid.uuid4())]
         )

@@ -1,11 +1,9 @@
-"""
-Memory API routes
-"""
-
 from fastapi import APIRouter, HTTPException
 from typing import List
 from pydantic import BaseModel
 from datetime import datetime
+
+from app.memory.workspace_memory import workspace_memory
 
 router = APIRouter()
 
@@ -25,44 +23,29 @@ class MemoryResponse(BaseModel):
     icon: str
 
 
-CATEGORY_ICONS = {
-    "User Preference": "👤",
-    "Project Context": "📁",
-    "Technical Note": "🔧",
-    "Workflow Pattern": "⚙️",
-    "Code Pattern": "💻",
-    "General Knowledge": "📚",
-}
-
-memory_db: dict = {}
-
-
 @router.get("/", response_model=List[MemoryResponse])
 async def get_memories():
-    """Get all memory entries"""
-    return list(memory_db.values())
+
+    return workspace_memory.get_facts()
 
 
 @router.post("/", response_model=MemoryResponse)
 async def create_memory(data: MemoryCreate):
-    """Create a new memory entry"""
-    mem_id = str(len(memory_db) + 1)
-    memory = MemoryResponse(
-        id=mem_id,
+
+    memory = workspace_memory.add_fact(
         category=data.category,
         content=data.content,
         source=data.source,
-        created_at=datetime.now().strftime("%m/%d/%Y"),
-        icon=CATEGORY_ICONS.get(data.category, "📝"),
     )
-    memory_db[mem_id] = memory
+
     return memory
 
 
 @router.delete("/{memory_id}")
 async def delete_memory(memory_id: str):
-    """Delete a memory entry"""
-    if memory_id not in memory_db:
-        raise HTTPException(status_code=404, detail="Memory entry not found")
-    del memory_db[memory_id]
-    return {"message": "Memory entry deleted"}
+
+    workspace_memory.delete_fact(memory_id)
+
+    return {
+        "message": "Memory deleted successfully"
+    }
