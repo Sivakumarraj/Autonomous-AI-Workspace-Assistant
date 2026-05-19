@@ -1,35 +1,36 @@
-"""
-Planner Agent - Orchestrates task planning and execution
-"""
-
-from typing import List, Dict, Any
-from app.core.logging import get_logger
-
-logger = get_logger(__name__)
-
-
 class PlannerAgent:
-    """Agent responsible for breaking down complex tasks into steps"""
 
-    def __init__(self):
-        self.name = "PlannerAgent"
+    async def create_plan(self, task: str):
 
-    async def create_plan(self, task: str, context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """Create an execution plan for a given task"""
-        logger.info(f"Creating plan for task: {task}")
-        steps = [
-            {"step": 1, "action": "analyze", "description": f"Analyze the task: {task}"},
-            {"step": 2, "action": "gather", "description": "Gather relevant context and data"},
-            {"step": 3, "action": "execute", "description": "Execute the primary action"},
-            {"step": 4, "action": "validate", "description": "Validate results"},
-            {"step": 5, "action": "report", "description": "Generate final report"},
+        task = task.lower()
+
+        # Resume analysis workflow
+        if "resume" in task and "skills" in task:
+
+            return [
+                "find_uploaded_files",
+                "retrieve_resume",
+                "extract_skills",
+                "save_skills_memory"
+            ]
+
+        # File listing workflow
+        if "show uploaded files" in task:
+
+            return [
+                "list_files"
+            ]
+
+        # Terminal workflow
+        if task.startswith("run command"):
+
+            return [
+                "execute_terminal"
+            ]
+
+        return [
+            "general_chat"
         ]
-        return steps
 
-    async def execute_plan(self, plan: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Execute a plan step by step"""
-        results = []
-        for step in plan:
-            logger.info(f"Executing step {step['step']}: {step['action']}")
-            results.append({"step": step["step"], "status": "completed"})
-        return {"status": "completed", "results": results}
+
+planner_agent = PlannerAgent()

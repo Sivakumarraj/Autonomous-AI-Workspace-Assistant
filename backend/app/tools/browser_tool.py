@@ -1,13 +1,22 @@
-"""Browser tool - Web browsing capabilities"""
-
-from typing import Dict, Any
+from playwright.async_api import async_playwright
 
 
-class BrowserTool:
-    async def fetch_page(self, url: str) -> Dict[str, Any]:
-        """Fetch a web page content"""
-        return {"url": url, "content": "Placeholder", "status": "success"}
+async def open_website(url: str):
 
-    async def screenshot(self, url: str) -> Dict[str, Any]:
-        """Take a screenshot of a web page"""
-        return {"url": url, "screenshot_path": None, "status": "not_implemented"}
+    try:
+
+        async with async_playwright() as p:
+
+            browser = await p.chromium.launch(
+                headless=False
+            )
+
+            page = await browser.new_page()
+
+            await page.goto(url)
+
+            return f"Opened website: {url}"
+
+    except Exception as e:
+
+        return f"Browser error: {str(e)}"

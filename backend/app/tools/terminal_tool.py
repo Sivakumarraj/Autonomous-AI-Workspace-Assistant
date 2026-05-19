@@ -1,16 +1,34 @@
-"""Terminal tool - Execute shell commands"""
-
 import subprocess
-from typing import Dict, Any
 
 
-class TerminalTool:
-    async def execute(self, command: str, timeout: int = 30) -> Dict[str, Any]:
-        """Execute a shell command (sandboxed)"""
-        try:
-            result = subprocess.run(
-                command, shell=True, capture_output=True, text=True, timeout=timeout
-            )
-            return {"stdout": result.stdout, "stderr": result.stderr, "returncode": result.returncode}
-        except subprocess.TimeoutExpired:
-            return {"error": "Command timed out", "returncode": -1}
+ALLOWED_COMMANDS = [
+    "dir",
+    "ls",
+    "pwd",
+    "python",
+    "pip"
+]
+
+
+def run_terminal_command(command: str):
+
+    if not any(
+        command.startswith(cmd)
+        for cmd in ALLOWED_COMMANDS
+    ):
+
+        return "Command not allowed."
+
+    try:
+
+        result = subprocess.check_output(
+            command,
+            shell=True,
+            text=True
+        )
+
+        return result
+
+    except Exception as e:
+
+        return str(e)

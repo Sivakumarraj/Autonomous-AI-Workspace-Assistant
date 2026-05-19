@@ -6,80 +6,37 @@ import { fileService } from '@/services/fileService';
 
 interface FileUploadProps {
   onUpload?: (data: any) => void;
+  onUploadComplete?: () => void;
 }
 
-export default function FileUpload({
-  onUpload,
-}: FileUploadProps) {
-
+export default function FileUpload({ onUpload, onUploadComplete }: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-
   const [loading, setLoading] = useState(false);
 
-  const handleClick = () => {
-    inputRef.current?.click();
-  };
+  const handleClick = () => inputRef.current?.click();
 
-  const handleFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-
     if (!file) return;
-
     const formData = new FormData();
-
     formData.append("file", file);
-
     try {
-
       setLoading(true);
-
-      const result =
-        await fileService.uploadFile(formData);
-
-      console.log(result);
-
+      const result = await fileService.uploadFile(formData);
       onUpload?.(result);
-
+      onUploadComplete?.();
     } catch (error) {
-
       console.error(error);
-
     } finally {
-
       setLoading(false);
-
     }
   };
 
   return (
     <>
-      <input
-        ref={inputRef}
-        type="file"
-        hidden
-        onChange={handleFileChange}
-      />
-
-      <button
-        onClick={handleClick}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '10px 20px',
-          borderRadius: '10px',
-          background:
-            'linear-gradient(135deg, #6c5ce7, #a855f7)',
-          border: 'none',
-          color: '#fff',
-          cursor: 'pointer',
-        }}
-      >
+      <input ref={inputRef} type="file" hidden onChange={handleFileChange} />
+      <button onClick={handleClick} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', background: 'linear-gradient(135deg, #6c5ce7, #a855f7)', border: 'none', color: '#fff', cursor: 'pointer' }}>
         <Upload size={16} />
-
         {loading ? 'Uploading...' : 'Upload'}
       </button>
     </>
