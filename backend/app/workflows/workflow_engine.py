@@ -1,6 +1,7 @@
 from app.tools.file_tool import list_uploaded_files
 from app.tools.terminal_tool import run_terminal_command
 from app.agents.planner_agent import planner_agent
+from app.workflows.browser_workflow import browser_workflow
 
 
 class WorkflowEngine:
@@ -41,6 +42,11 @@ class WorkflowEngine:
                     "step": step,
                     "output": result
                 })
+
+            # BROWSER
+            elif step in {"google_search", "extract_webpage", "summarize_webpage"}:
+                result = await browser_workflow.run(task)
+                results.append({"step": step, "output": result})
 
             # GENERAL CHAT
             elif step == "general_chat":
