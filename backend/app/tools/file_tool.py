@@ -1,5 +1,5 @@
 import os
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 
 
 UPLOAD_FOLDER = "uploads"

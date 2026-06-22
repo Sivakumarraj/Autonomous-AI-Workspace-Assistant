@@ -47,7 +47,7 @@ export default function FilesPage() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
         {filtered.map((file, i) => (
-          <FileCard key={file.id} name={file.filename} size="-" type="pdf" status={file.status} index={i} />
+          <FileCard key={file.id} name={file.filename} size="-" type="pdf" status={file.status as 'ready' | 'processing' | 'error'} index={i} />
         ))}
       </div>
       {filtered.length === 0 && (

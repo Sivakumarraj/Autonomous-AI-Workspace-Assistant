@@ -10,7 +10,7 @@ interface FileCardProps {
   index: number;
 }
 
-const fileIconMap: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
+const fileIconMap: Record<string, React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>> = {
   pdf: FileText,
   docx: FileText,
   csv: FileSpreadsheet,
