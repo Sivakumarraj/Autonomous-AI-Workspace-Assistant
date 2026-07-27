@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GitBranch, Plus } from 'lucide-react';
 import { useToast } from '@/components/providers/ToastProvider';
 import WorkflowCard from '@/components/workflows/WorkflowCard';
@@ -9,30 +9,51 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import Modal from '@/components/ui/Modal';
 import { SkeletonCards } from '@/components/ui/Skeleton';
-import { workflowService } from '@/services/workflowService';
-import type { Workflow } from '@/types/workflow';
+import { IN_FLIGHT, workflowService } from '@/services/workflowService';
+import type { Workflow, WorkflowStep } from '@/types/workflow';
 
 const FIELD_CLASS =
   'w-full rounded-[var(--radius-control)] border border-line bg-surface-sunken px-4 py-2.5 text-sm text-ink outline-none transition-colors focus:border-accent placeholder:text-ink-subtle';
 
+/** How often to re-check a workflow that is planning or running. */
+const POLL_MS = 2000;
+
 export default function WorkflowsPage() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [stepsById, setStepsById] = useState<Record<number, WorkflowStep[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', total_steps: 5 });
+  const [form, setForm] = useState({ name: '', description: '' });
 
   const [pendingDelete, setPendingDelete] = useState<Workflow | null>(null);
   const { toast } = useToast();
+
+  // Lets the poller announce completion without re-subscribing on every tick.
+  const previousStatuses = useRef<Record<number, string>>({});
 
   const loadWorkflows = useCallback(async () => {
     try {
       const data = await workflowService.getWorkflows();
       setWorkflows(data);
       setError(null);
+
+      // Fetch steps for anything that has been planned, so re-visiting the
+      // page still shows the last run's results.
+      const withSteps = data.filter((w) => w.steps_total > 0);
+      const results = await Promise.all(
+        withSteps.map(async (w) => {
+          try {
+            return [w.id, await workflowService.getSteps(w.id)] as const;
+          } catch {
+            return [w.id, []] as const;
+          }
+        }),
+      );
+      setStepsById(Object.fromEntries(results));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load workflows');
     } finally {
@@ -40,18 +61,59 @@ export default function WorkflowsPage() {
     }
   }, []);
 
-  // One-shot fetch on mount. The rule guards against cascading renders from
-  // repeated setState; this runs once and only sets state after the request
-  // resolves. Fetching server-side was rejected because it would make
-  // `next build` depend on the backend being reachable.
+  // One-shot fetch on mount; state is only set after the request resolves.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadWorkflows(); }, [loadWorkflows]);
 
-  /**
-   * Apply a change optimistically, then reconcile with the server response.
-   * On failure the previous list is restored so the UI never shows a state
-   * the backend rejected.
-   */
+  const running = useMemo(
+    () => workflows.filter((w) => IN_FLIGHT.has(w.status)),
+    [workflows],
+  );
+
+  // Poll only while something is actually in flight, and stop as soon as it
+  // settles — no background traffic on an idle page.
+  useEffect(() => {
+    if (running.length === 0) return;
+
+    const timer = window.setInterval(async () => {
+      const updated = await Promise.all(
+        running.map(async (w) => {
+          try {
+            const [workflow, steps] = await Promise.all([
+              workflowService.getWorkflow(w.id),
+              workflowService.getSteps(w.id),
+            ]);
+            return { workflow, steps };
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      for (const entry of updated) {
+        if (!entry) continue;
+        const { workflow, steps } = entry;
+
+        setWorkflows((current) =>
+          current.map((w) => (w.id === workflow.id ? workflow : w)),
+        );
+        setStepsById((current) => ({ ...current, [workflow.id]: steps }));
+
+        const previous = previousStatuses.current[workflow.id];
+        if (previous !== workflow.status && !IN_FLIGHT.has(workflow.status)) {
+          if (workflow.status === 'completed') {
+            toast(`“${workflow.name}” completed`, 'success');
+          } else if (workflow.status === 'failed') {
+            toast(`“${workflow.name}” failed: ${workflow.error}`, 'error');
+          }
+        }
+        previousStatuses.current[workflow.id] = workflow.status;
+      }
+    }, POLL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [running, toast]);
+
   const mutate = useCallback(
     async (
       workflow: Workflow,
@@ -80,6 +142,22 @@ export default function WorkflowsPage() {
     },
     [workflows, toast],
   );
+
+  const handleRun = async (workflow: Workflow) => {
+    setBusyId(workflow.id);
+    try {
+      const { workflow: started } = await workflowService.runWorkflow(workflow.id);
+      setWorkflows((current) =>
+        current.map((w) => (w.id === started.id ? started : w)),
+      );
+      previousStatuses.current[workflow.id] = started.status;
+      toast(`“${workflow.name}” started — planning steps`, 'info');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not start run', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const handlePause = (workflow: Workflow) =>
     mutate(
@@ -119,12 +197,12 @@ export default function WorkflowsPage() {
       const created = await workflowService.createWorkflow({
         name: form.name.trim(),
         description: form.description.trim(),
-        total_steps: form.total_steps,
+        total_steps: 0,
       });
       setWorkflows((current) => [created, ...current]);
-      toast(`“${created.name}” created`, 'success');
+      toast(`“${created.name}” created — press Run to execute it`, 'success');
       setCreateOpen(false);
-      setForm({ name: '', description: '', total_steps: 5 });
+      setForm({ name: '', description: '' });
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not create workflow', 'error');
     } finally {
@@ -154,8 +232,9 @@ export default function WorkflowsPage() {
       <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-ink">Workflows</h1>
-          <p className="mt-1.5 text-[15px] text-ink-muted">
-            Manage and monitor automated multi-step tasks.
+          <p className="mt-1.5 max-w-2xl text-[15px] text-ink-muted">
+            Describe what you want done. The assistant plans the steps, runs them
+            against your documents and memory, and reports back.
           </p>
         </div>
         <Button
@@ -178,14 +257,16 @@ export default function WorkflowsPage() {
       ) : workflows.length > 0 ? (
         <div
           data-testid="workflow-grid"
-          className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4"
+          className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4"
         >
           {workflows.map((workflow, i) => (
             <WorkflowCard
               key={workflow.id}
               workflow={workflow}
+              steps={stepsById[workflow.id] ?? []}
               index={i}
               busy={busyId === workflow.id}
+              onRun={handleRun}
               onPause={handlePause}
               onResume={handleResume}
               onDelete={setPendingDelete}
@@ -197,7 +278,7 @@ export default function WorkflowsPage() {
         <EmptyState
           icon={GitBranch}
           title="No workflows yet"
-          message="Create a workflow to track a multi-step task and its progress."
+          message="Create one and press Run. Try “Summarise my documents and save the key facts to memory”."
           action={
             <Button
               variant="primary"
@@ -214,7 +295,7 @@ export default function WorkflowsPage() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         title="Create workflow"
-        description="Track a multi-step task and its progress."
+        description="Describe the outcome you want. The steps are planned for you when you run it."
         footer={
           <>
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>
@@ -246,7 +327,7 @@ export default function WorkflowsPage() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && form.name.trim()) void handleCreate();
               }}
-              placeholder="Document intelligence pipeline"
+              placeholder="Resume skills report"
               className={FIELD_CLASS}
             />
           </div>
@@ -256,39 +337,20 @@ export default function WorkflowsPage() {
               htmlFor="workflow-description"
               className="mb-2 block text-sm font-medium text-ink-muted"
             >
-              Description
+              What should it do?
             </label>
             <textarea
               id="workflow-description"
-              rows={3}
+              rows={4}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="What this workflow does"
+              placeholder="Read my uploaded documents, extract the key technical facts into memory, and write a short summary."
               className={`${FIELD_CLASS} resize-none`}
             />
-          </div>
-
-          <div>
-            <label
-              htmlFor="workflow-steps"
-              className="mb-2 block text-sm font-medium text-ink-muted"
-            >
-              Total steps
-            </label>
-            <input
-              id="workflow-steps"
-              type="number"
-              min={1}
-              max={100}
-              value={form.total_steps}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  total_steps: Math.max(1, Number(e.target.value) || 1),
-                })
-              }
-              className={FIELD_CLASS}
-            />
+            <p className="mt-2 text-xs text-ink-subtle">
+              Steps are planned from this description and run against your
+              documents and memory. No shell or browser access.
+            </p>
           </div>
         </div>
       </Modal>
@@ -298,7 +360,7 @@ export default function WorkflowsPage() {
         title="Delete workflow?"
         message={
           pendingDelete
-            ? `“${pendingDelete.name}” will be permanently removed. This cannot be undone.`
+            ? `“${pendingDelete.name}” and its step history will be permanently removed. This cannot be undone.`
             : ''
         }
         confirmLabel="Delete"

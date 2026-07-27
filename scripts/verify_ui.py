@@ -34,6 +34,7 @@ IGNORED_REQUEST_FAILURES: tuple[str, ...] = ()
 class Results:
     passed: list[str] = field(default_factory=list)
     failed: list[tuple[str, str]] = field(default_factory=list)
+    skipped: list[tuple[str, str]] = field(default_factory=list)
 
     def ok(self, name: str) -> None:
         self.passed.append(name)
@@ -43,12 +44,25 @@ class Results:
         self.failed.append((name, reason))
         print(f"  FAIL  {name}\n        {reason}")
 
+    def skip(self, name: str, reason: str) -> None:
+        self.skipped.append((name, reason))
+        print(f"  SKIP  {name}\n        {reason}")
+
     def check(self, name: str, condition: bool, reason: str = "") -> bool:
         if condition:
             self.ok(name)
         else:
             self.fail(name, reason or "assertion failed")
         return condition
+
+
+def is_quota_error(text: str) -> bool:
+    """True when a failure is the Gemini free-tier rate limit rather than a bug.
+
+    Reporting these as failures would be misleading: the application handled
+    the error correctly, the account simply ran out of quota.
+    """
+    return "429" in text or "RESOURCE_EXHAUSTED" in text or "quota" in text.lower()
 
 
 class PageMonitor:
@@ -153,11 +167,15 @@ def verify_workflows(page: Page, monitor: PageMonitor, base: str, r: Results) ->
     monitor.reset()
     page.goto(f"{base}/workflows", wait_until="networkidle")
 
+    before_count = page.locator('[data-testid="workflow-grid"] > div').count()
+
     page.click('button:has-text("Create Workflow")')
     page.wait_for_selector('[role="dialog"]', timeout=5000)
     page.fill("#workflow-name", "Verification workflow")
-    page.fill("#workflow-description", "Created by verify_ui.py")
-    page.fill("#workflow-steps", "4")
+    page.fill(
+        "#workflow-description",
+        "List the uploaded documents and write a one-paragraph summary of them.",
+    )
     page.locator('[role="dialog"] button:has-text("Create")').click()
     page.wait_for_timeout(2000)
 
@@ -168,7 +186,8 @@ def verify_workflows(page: Page, monitor: PageMonitor, base: str, r: Results) ->
         card.inner_text()[:120],
     )
 
-    # Pause — this button previously had no onClick at all.
+    # Pause/resume first: this button previously had no onClick at all, and
+    # pausing is correctly disabled once a run has completed.
     card.locator('button:has-text("Pause")').click()
     page.wait_for_timeout(1800)
     r.check("pause sets status to Paused", "Paused" in card.inner_text())
@@ -177,32 +196,90 @@ def verify_workflows(page: Page, monitor: PageMonitor, base: str, r: Results) ->
     page.wait_for_timeout(1800)
     r.check("resume sets status to Active", "Active" in card.inner_text())
 
-    # Step increment updates the progress bar.
-    width_before = card.locator('[data-testid="progress-fill"]').get_attribute("style")
-    card.locator('button[aria-label="Increase completed steps"]').click()
-    page.wait_for_timeout(1800)
-    width_after = card.locator('[data-testid="progress-fill"]').get_attribute("style")
-    r.check(
-        "step increment moves the progress bar",
-        width_before != width_after,
-        f"{width_before} -> {width_after}",
-    )
-    r.check("progress shows 1 / 4", "1 / 4" in card.inner_text(), card.inner_text()[:160])
+    # --- Run it for real: plan, execute, report -------------------------------
+    card.locator('button[aria-label^="Run "]').click()
+    page.wait_for_timeout(2500)
 
+    started_text = card.inner_text()
+    if "Failed" in started_text and is_quota_error(started_text):
+        # A quota error rejects the planning call almost instantly, so the
+        # in-flight state is gone before this check runs.
+        r.skip(
+            "run enters planning/running",
+            "Gemini quota exhausted; run failed before the state could be observed",
+        )
+    else:
+        r.check(
+            "run enters planning/running",
+            any(s in started_text for s in ("Planning", "Running", "Completed")),
+            started_text[:200],
+        )
+    page.screenshot(path=str(SHOTS / "workflow-running.png"))
+
+    # Poll for up to 90s; planning plus several Gemini calls take a while.
+    settled = False
+    for _ in range(45):
+        page.wait_for_timeout(2000)
+        text = card.inner_text()
+        if "Completed" in text or "Failed" in text:
+            settled = True
+            break
+
+    r.check("run reaches a terminal state within 90s", settled, card.inner_text()[:200])
+
+    text = card.inner_text()
+    steps = card.locator('[data-testid="workflow-steps"] button[data-step-status]')
+    step_count = steps.count()
+    statuses = [
+        steps.nth(i).get_attribute("data-step-status") for i in range(step_count)
+    ]
+
+    r.check("steps were planned and rendered", step_count > 0, f"{step_count} steps")
+
+    if "Failed" in text and is_quota_error(text):
+        # The app behaved correctly: it stopped at the failing step, recorded
+        # the real error, and left later steps pending. That is what we want
+        # from a quota error — it just is not a successful run.
+        reason = "Gemini free-tier quota exhausted (429); run correctly reported the failure"
+        r.skip("run completed successfully", reason)
+        r.skip("progress reaches 100%", reason)
+        r.check(
+            "failure is reported cleanly, not silently",
+            "failed" in statuses and "Gemini request failed" in text,
+            f"statuses={statuses}",
+        )
+    else:
+        r.check("run completed successfully", "Completed" in text, text[:300])
+        r.check("progress reaches 100%", "(100%)" in text, text[:200])
+        r.check(
+            "every step completed",
+            all(status == "completed" for status in statuses),
+            str(statuses),
+        )
+
+    # Expanding a step shows its real output.
+    steps.first.click()
+    page.wait_for_timeout(600)
+    r.check(
+        "step output is viewable",
+        card.locator("pre").count() > 0,
+        "no output panel rendered",
+    )
     page.screenshot(path=str(SHOTS / "workflows.png"))
 
     card.locator('button[aria-label^="Delete "]').click()
     page.wait_for_selector('[role="dialog"]', timeout=5000)
     page.locator('[role="dialog"] button:has-text("Delete")').click()
-    page.wait_for_timeout(2000)
-    # Scope to the grid: the success toast quotes the workflow name, so a
-    # whole-body check would still find it while the toast is on screen.
-    grid = page.locator('[data-testid="workflow-grid"]')
-    remaining = grid.inner_text() if grid.count() else ""
+    page.wait_for_timeout(2500)
+
+    # Count rather than name: earlier runs of this script may have left their
+    # own "Verification workflow" behind, and the success toast quotes the name
+    # too, so a text search gives false failures.
+    after_count = page.locator('[data-testid="workflow-grid"] > div').count()
     r.check(
         "delete removes the workflow",
-        "Verification workflow" not in remaining,
-        remaining[:160],
+        after_count == before_count,
+        f"expected {before_count} cards, found {after_count}",
     )
     r.check("no errors during workflow flow", monitor.clean, monitor.report())
 
@@ -459,7 +536,15 @@ def main() -> int:
             browser.close()
 
     print("\n" + "=" * 62)
-    print(f"PASSED {len(results.passed)}   FAILED {len(results.failed)}")
+    print(
+        f"PASSED {len(results.passed)}   "
+        f"FAILED {len(results.failed)}   "
+        f"SKIPPED {len(results.skipped)}"
+    )
+    if results.skipped:
+        print("\nSkipped:")
+        for name, reason in results.skipped:
+            print(f"  - {name}: {reason}")
     if results.failed:
         print("\nFailures:")
         for name, reason in results.failed:

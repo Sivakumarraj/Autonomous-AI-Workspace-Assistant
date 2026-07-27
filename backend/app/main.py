@@ -28,6 +28,7 @@ from app.core.config import DEFAULT_SECRET_KEY, settings  # noqa: E402
 from app.core.exceptions import WorkspaceError  # noqa: E402
 from app.core.logging import get_logger, setup_logging  # noqa: E402
 from app.database.connection import init_db  # noqa: E402
+from app.database.workflow_db import reconcile_interrupted_runs  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -55,6 +56,13 @@ async def lifespan(app: FastAPI):
     settings.ensure_directories()
     init_db()
     _seed_default_user()
+
+    # Runs execute in in-process background tasks, so a deploy or crash
+    # mid-run would otherwise leave a workflow stuck showing "running" with
+    # nothing driving it.
+    interrupted = reconcile_interrupted_runs()
+    if interrupted:
+        logger.warning("Marked %d interrupted workflow run(s) as failed", interrupted)
 
     logger.info(
         "%s v%s ready (debug=%s, gemini=%s, terminal_tool=%s, browser_tool=%s)",

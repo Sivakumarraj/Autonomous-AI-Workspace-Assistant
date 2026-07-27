@@ -23,7 +23,11 @@ def generate_embedding(text: str) -> list[float]:
         )
     except Exception as exc:
         logger.exception("Embedding request failed")
-        raise AIUnavailableError(f"Embedding request failed: {exc}") from exc
+        # Same treatment as generation: raw provider errors carry an entire
+        # JSON document that is unreadable in the UI.
+        from app.services.gemini_service import friendly_error
+
+        raise AIUnavailableError(f"Embedding failed — {friendly_error(exc)}") from exc
 
     if not response.embeddings:
         raise AIUnavailableError("Embedding response contained no vectors")

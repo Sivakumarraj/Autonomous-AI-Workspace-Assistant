@@ -36,6 +36,21 @@ os.environ.update(
 )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _database():
+    """Create the schema before any test runs.
+
+    The app normally does this in its lifespan, but unit tests that call into
+    the data layer directly never start the app, so they would otherwise hit
+    "no such table" depending on test ordering.
+    """
+    from app.core.config import settings
+    from app.database.connection import init_db
+
+    settings.ensure_directories()
+    init_db()
+
+
 @pytest.fixture(scope="session")
 def data_dir() -> Path:
     return Path(_DATA_DIR)

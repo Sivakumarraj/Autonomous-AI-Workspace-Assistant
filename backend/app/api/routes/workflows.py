@@ -6,17 +6,22 @@ every restart.
 """
 
 
+from functools import partial
+
 from anyio import to_thread
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
 from app.database.workflow_db import (
+    IN_FLIGHT_STATUSES,
     add_workflow,
     delete_workflow,
+    get_steps,
     get_workflow,
     get_workflows,
     update_workflow,
 )
+from app.workflows.runner import workflow_runner
 
 router = APIRouter()
 
@@ -42,7 +47,29 @@ class WorkflowResponse(BaseModel):
     progress: int = 0
     steps_total: int = 0
     steps_done: int = 0
+    error: str = ""
+    started_at: str = ""
+    finished_at: str = ""
     created_at: str = ""
+
+
+class StepResponse(BaseModel):
+    id: int
+    workflow_id: int
+    position: int
+    action: str
+    title: str
+    params: dict = {}
+    status: str = "pending"
+    output: str = ""
+    error: str = ""
+    started_at: str = ""
+    finished_at: str = ""
+
+
+class RunResponse(BaseModel):
+    workflow: WorkflowResponse
+    message: str
 
 
 @router.get("/", response_model=list[WorkflowResponse])
@@ -104,3 +131,45 @@ async def remove_workflow(workflow_id: int):
     if not deleted:
         raise HTTPException(status_code=404, detail="Workflow not found")
     return {"message": "Workflow deleted", "id": workflow_id}
+
+
+@router.post("/{workflow_id}/run", response_model=RunResponse, status_code=202)
+async def run_workflow(workflow_id: int, background: BackgroundTasks):
+    """Plan and execute a workflow.
+
+    Returns immediately with 202; the run continues in the background. Poll
+    `GET /workflows/{id}/steps` to watch it progress.
+    """
+    workflow = await to_thread.run_sync(get_workflow, workflow_id)
+    if workflow is None:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    if workflow["status"] in IN_FLIGHT_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"“{workflow['name']}” is already {workflow['status']}.",
+        )
+
+    # Reset progress up front so the UI flips to a running state on this
+    # response, rather than showing the previous run until the first step lands.
+    # to_thread.run_sync takes positional arguments only, hence partial.
+    updated = await to_thread.run_sync(
+        partial(update_workflow, workflow_id, status="planning", steps_done=0, error="")
+    )
+
+    background.add_task(workflow_runner.run, workflow_id)
+
+    return RunResponse(
+        workflow=updated,
+        message="Workflow started. Poll /steps to follow its progress.",
+    )
+
+
+@router.get("/{workflow_id}/steps", response_model=list[StepResponse])
+async def read_steps(workflow_id: int):
+    """The planned steps and their live status/output."""
+    workflow = await to_thread.run_sync(get_workflow, workflow_id)
+    if workflow is None:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    return await to_thread.run_sync(get_steps, workflow_id)

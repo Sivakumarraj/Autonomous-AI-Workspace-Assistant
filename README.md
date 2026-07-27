@@ -15,7 +15,7 @@ generation, and keep persistent memory across conversations.
 | **RAG pipeline** | Working | Extract → chunk (with overlap) → embed via `gemini-embedding-001` → ChromaDB → retrieve top-k |
 | **Chat** | Working | Gemini 2.5 Flash, switches to RAG automatically, shows retrieval mode and expandable source chunks |
 | **Memory** | Working | Auto-extracted from chat, deduplicated, plus manual create/delete and category filtering in the UI |
-| **Workflows** | Working (UI) | Create, pause, resume, step progress, and delete — all persisted. The *execution* engine still only handles file listing |
+| **Workflows** | Working | Describe an outcome; Gemini plans the steps and the engine runs them against your documents and memory, with live progress. See [Workflows](#workflows) |
 | **Dashboard / Logs** | Working | Live counters, activity feed, level and category filters, optional auto-refresh |
 | **Settings** | Working | Read-only view of live server config plus local preferences. Deliberately has no API-key field — a key typed into a browser cannot reach the backend safely |
 | **Command palette** | Working | ⌘K / Ctrl+K, fuzzy search across files, memories, workflows, and logs |
@@ -67,6 +67,59 @@ echo "GEMINI_API_KEY=your-key"            >  .env
 echo "SECRET_KEY=$(openssl rand -hex 32)" >> .env
 docker compose up --build
 ```
+
+---
+
+## Workflows
+
+A workflow is a described outcome, not a script. You give it a name and a
+description; pressing **Run** hands that to Gemini, which plans concrete steps.
+The engine executes them in order, feeding each step's output into the next, and
+the card shows progress live.
+
+Example — *"Read my uploaded documents, extract the key technical facts into
+memory, and write a short summary"* produced:
+
+```
+1. extract_facts   Extract technologies from resume  -> saved 4 facts to memory
+2. write_note      Report on extracted technologies  -> a written summary
+```
+
+### Available step actions
+
+The planner may only emit actions from this catalog (`app/workflows/step_catalog.py`):
+
+| Action | What it does |
+|---|---|
+| `list_documents` | Names every uploaded document |
+| `search_documents` | Retrieves the passages matching a query |
+| `answer_question` | Answers a question from the documents |
+| `summarize_documents` | Summarises document content |
+| `extract_facts` | Pulls durable facts out and **saves them to memory** |
+| `recall_memory` | Looks up what is already remembered |
+| `save_memory` | Stores one specific fact |
+| `write_note` | Writes a report from earlier step results |
+
+### Why the catalog is a hard boundary
+
+The planner is an LLM, so **its output is untrusted**. Every proposed action is
+checked against the catalog and every parameter is filtered to the keys that
+action declares — an invented action name is dropped, never executed. Shell and
+browser access are deliberately excluded: wiring them in would let the contents
+of an uploaded document decide what runs on your server.
+
+### Behaviour worth knowing
+
+- **No API key?** A deterministic keyword-based plan is used instead, and steps
+  needing Gemini report that they were skipped. The workflow still completes.
+- **Re-running** re-plans from scratch and replaces the previous steps.
+- **A failed step stops the run** and records the real reason on the workflow.
+- **A restart mid-run** marks the workflow failed rather than leaving it stuck
+  on "running" forever — execution lives in an in-process background task.
+- **Free-tier quota is small.** Gemini's free tier allows 20 generate requests
+  per *day* per model. One workflow run costs roughly 3–5 of them, so expect
+  about 4–6 runs a day before you hit `RESOURCE_EXHAUSTED`. The UI reports this
+  as a plain message, not a raw error dump.
 
 ---
 
@@ -153,7 +206,7 @@ either convention works for `NEXT_PUBLIC_API_URL`.
 ```bash
 cd backend
 pip install -r requirements-dev.txt
-pytest              # 60 tests
+pytest              # 95 tests
 ruff check app tests
 ```
 
