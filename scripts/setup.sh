@@ -1,27 +1,57 @@
-#!/bin/bash
-# Setup script for AI Workspace Automation
+#!/usr/bin/env bash
+# One-shot local development setup.
+#
+#   ./scripts/setup.sh
+#
+# Run from anywhere; paths resolve relative to the repository root.
+set -euo pipefail
 
-echo "🚀 Setting up AI Workspace Automation..."
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Create directories
-mkdir -p uploads/{pdfs,docs,images,temp}
-mkdir -p vector_store
-mkdir -p logs/{api_logs,workflow_logs,error_logs}
+echo "Setting up Nexus AI Workspace in $ROOT"
 
-# Backend setup
-echo "📦 Setting up backend..."
-cd backend
-python -m venv venv
-source venv/bin/activate || venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env 2>/dev/null || true
+# --- Backend -----------------------------------------------------------------
+echo
+echo "[1/2] Backend"
+cd "$ROOT/backend"
 
-# Frontend setup
-echo "📦 Setting up frontend..."
-cd ../frontend
+python3 -m venv .venv
+
+# The previous version of this script tried
+#   source venv/bin/activate || venv\Scripts\activate
+# which is broken on both platforms. Call the interpreter directly instead —
+# no activation needed.
+if [ -x ".venv/bin/python" ]; then
+  PY=".venv/bin/python"          # Linux / macOS
+else
+  PY=".venv/Scripts/python.exe"  # Windows (Git Bash)
+fi
+
+"$PY" -m pip install --upgrade pip --quiet
+"$PY" -m pip install -r requirements.txt
+
+[ -f .env ] || { cp .env.example .env; echo "  created backend/.env — add your GEMINI_API_KEY"; }
+
+# --- Frontend ----------------------------------------------------------------
+echo
+echo "[2/2] Frontend"
+cd "$ROOT/frontend"
+
 npm install
 
-echo "✅ Setup complete!"
-echo ""
-echo "To start the backend:  cd backend && uvicorn app.main:app --reload"
-echo "To start the frontend: cd frontend && npm run dev"
+[ -f .env.local ] || { cp .env.example .env.local; echo "  created frontend/.env.local"; }
+
+# --- Done --------------------------------------------------------------------
+cat <<EOF
+
+Setup complete.
+
+  Backend:   cd backend && .venv/bin/python -m uvicorn app.main:app --reload
+  Frontend:  cd frontend && npm run dev
+
+  API docs:  http://localhost:8000/docs
+  App:       http://localhost:3000
+
+Add your GEMINI_API_KEY to backend/.env to enable chat and RAG.
+Without it the app still runs; AI endpoints return 503.
+EOF

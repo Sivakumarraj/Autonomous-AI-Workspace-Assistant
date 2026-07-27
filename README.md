@@ -1,75 +1,179 @@
-# AI Workspace Automation - Nexus AI
+# Nexus AI Workspace
 
-A full-stack AI workspace assistant with autonomous capabilities for document processing, conversational AI, workflow automation, and memory management.
+A full-stack AI workspace: upload documents, chat with them via retrieval-augmented
+generation, and keep persistent memory across conversations.
 
-## 🚀 Features
+**Stack:** FastAPI + Google Gemini + ChromaDB + SQLite · Next.js 16 + TypeScript
 
-- **Dashboard** — Real-time overview of workspace activity, stats, and quick actions
-- **AI Chat** — Multi-turn conversations with context-aware AI responses
-- **File Manager** — Upload, process, and manage documents with AI indexing
-- **Memory** — Persistent AI memory that learns from your interactions
-- **Workflows** — Automated multi-step AI task pipelines
-- **System Logs** — Real-time audit trail of all workspace activities
-- **Settings** — Configure API keys, model routing, and AI behavior
+---
 
-## 🏗️ Architecture
+## What it does
 
-```
-ai-workspace-automation/
-├── frontend/          # Next.js 15 + TypeScript + Tailwind CSS
-├── backend/           # FastAPI + Python AI agents
-├── uploads/           # File storage
-├── vector_store/      # Embedding vector store
-├── logs/              # Application logs
-├── scripts/           # Setup and migration scripts
-├── docs/              # Documentation
-└── docker/            # Docker configuration
-```
+| Feature | State | Notes |
+|---|---|---|
+| **Document upload** | Working | PDF / TXT / MD, streamed to disk with a size cap and an extension allowlist |
+| **RAG pipeline** | Working | Extract → chunk (with overlap) → embed via `gemini-embedding-001` → ChromaDB → retrieve top-k |
+| **Chat** | Working | Gemini 2.5 Flash, automatically switches to RAG mode when the question is about your documents |
+| **Memory** | Working | Facts are auto-extracted from chat, deduplicated, persisted, and recalled on later turns |
+| **Dashboard / Logs** | Working | Live counters and an activity trail, all read from the database |
+| **Workflows** | Partial | Full CRUD and persistence; the execution engine handles file listing only |
+| **Auth** | Available, not enforced | Real JWT + bcrypt at `/auth/*`. App routes are public so the demo works without a login — add `Depends(get_current_user)` to lock them down |
+| **Browser automation** | Scaffolded | Playwright tool exists behind `ENABLE_BROWSER_TOOL`; off by default |
+| **Agents** (`app/agents/`) | Scaffolded | `browser_agent`, `memory_agent`, `rag_agent`, `workflow_agent` return placeholder values. The working RAG and memory paths are in `app/rag/` and `app/memory/` |
+| **Chat history sidebar** | Mock | No conversations endpoint yet; seeded from `utils/constants.ts` |
 
-## ⚡ Quick Start
+---
 
-### Prerequisites
-- Node.js 18+
-- Python 3.11+
+## Quick start
 
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
+**Requirements:** Python 3.11+, Node 20+, and a
+[Gemini API key](https://aistudio.google.com/apikey) (the free tier is enough).
 
 ### Backend
+
 ```bash
 cd backend
+python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+
+cp .env.example .env       # then put your GEMINI_API_KEY in it
 uvicorn app.main:app --reload
 ```
 
-### Docker
+API docs at http://localhost:8000/docs · health at http://localhost:8000/health
+
+> The server starts fine **without** an API key. Every non-AI endpoint keeps
+> working and chat/embedding calls return a `503` explaining what is missing.
+
+### Frontend
+
 ```bash
-cd docker
-docker-compose up -d
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
 ```
 
-## 📖 Documentation
+http://localhost:3000
 
-- [Architecture](docs/architecture.md)
-- [API Documentation](docs/api_docs.md)
-- [Deployment Guide](docs/deployment.md)
-- [Workflow Design](docs/workflow_design.md)
+### Docker
 
-## 🛠️ Tech Stack
+```bash
+cd docker
+echo "GEMINI_API_KEY=your-key"            >  .env
+echo "SECRET_KEY=$(openssl rand -hex 32)" >> .env
+docker compose up --build
+```
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 15, TypeScript, Tailwind CSS, Zustand |
-| Backend | FastAPI, Python 3.11 |
-| AI | OpenAI GPT-4o, Anthropic Claude, Google Gemini |
-| Vector Store | ChromaDB |
-| Database | SQLite / PostgreSQL |
-| Deployment | Docker, Vercel, Render |
+---
 
-## 📄 License
+## Configuration
 
-MIT License - see [LICENSE](LICENSE) for details.
+All backend settings are environment variables (see `backend/.env.example`).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | *(empty)* | Enables chat, embeddings, RAG. Without it the app runs degraded |
+| `DATA_DIR` | `backend/data` | **Everything stateful** — SQLite, ChromaDB, uploads, logs. Mount a volume here |
+| `SECRET_KEY` | dev default | JWT signing key. Startup **fails** with `DEBUG=false` if left at the default |
+| `ALLOWED_ORIGINS` | localhost:3000 | CORS allowlist, comma-separated. A wildcard is not usable with credentials |
+| `DEBUG` | `false` | Enables reload and seeds the `admin` demo account |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Chat model |
+| `EMBEDDING_MODEL` | `gemini-embedding-001` | Embedding model (3072 dimensions) |
+| `CHUNK_SIZE` / `CHUNK_OVERLAP` | `500` / `50` | RAG chunking |
+| `MAX_UPLOAD_SIZE` | 50 MB | Enforced while streaming, before the file is fully read |
+| `ENABLE_TERMINAL_TOOL` | `false` | ⚠️ Runs shell commands server-side. **Leave off in production** |
+| `ENABLE_BROWSER_TOOL` | `false` | Playwright automation; needs `playwright install chromium` |
+
+Frontend: `NEXT_PUBLIC_API_URL` (the backend origin). Next.js inlines this at
+**build** time, so changing it requires a rebuild, not just a restart.
+
+---
+
+## Deployment
+
+Backend to **Render**, frontend to **Vercel** — both have working free tiers.
+Step-by-step instructions: [`docs/deployment.md`](docs/deployment.md).
+
+The short version:
+
+1. Render → New → Blueprint → this repo (uses `render.yaml`). Set `GEMINI_API_KEY`
+   and `ALLOWED_ORIGINS` in the dashboard.
+2. Vercel → import the repo, root directory `frontend`, set
+   `NEXT_PUBLIC_API_URL` to the Render URL.
+3. Update `ALLOWED_ORIGINS` on Render to the Vercel domain and redeploy.
+
+`render.yaml` mounts a 1 GB disk at `/data`. Without it every deploy would start
+with an empty database.
+
+---
+
+## Architecture
+
+```
+frontend/                  Next.js 16 App Router
+  src/lib/config.ts        Single source of the API base URL
+  src/services/            Typed fetch wrappers; surface backend error messages
+  src/app/                 Pages — all read live data from the API
+
+backend/app/
+  main.py                  App wiring, lifespan, /health, CORS, router mounting
+  core/
+    config.py              Pydantic settings; all paths derive from DATA_DIR
+    clients.py             Lazy, cached Gemini + ChromaDB clients
+    security.py            JWT (PyJWT) + bcrypt
+    exceptions.py          Typed errors mapped to HTTP status codes
+  api/routes/              chat, files, memory, logs, dashboard, workflows, auth
+  rag/                     chunking.py, retrieval.py
+  services/                gemini, embedding, vector store
+  memory/                  workspace_memory.py — durable facts
+  database/                connection.py (shared SQLite) + per-table modules
+  tools/                   file, terminal (gated), browser (gated)
+```
+
+Two design points worth knowing:
+
+- **Nothing is constructed at import time.** Clients, directories, and the
+  database schema are all set up in the FastAPI lifespan, so importing the app
+  has no side effects and a missing API key cannot crash startup.
+- **Blocking calls run in a thread pool.** The Gemini SDK, ChromaDB, and sqlite3
+  are all synchronous; each is wrapped in `anyio.to_thread.run_sync` so one slow
+  request cannot stall the event loop.
+
+Routers are mounted twice — bare (`/files`) and under `/api` (`/api/files`) — so
+either convention works for `NEXT_PUBLIC_API_URL`.
+
+---
+
+## Tests
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest              # 56 tests
+ruff check app tests
+```
+
+The suite runs with **no API key configured** on purpose: that proves the app
+still boots and serves its whole non-AI surface. It covers path traversal,
+command injection, JWT forgery and expiry, upload limits, and chunking edges.
+
+CI (`.github/workflows/ci.yml`) runs backend lint + tests, frontend lint + build,
+and builds both Docker images on every push.
+
+---
+
+## Security notes
+
+- `ENABLE_TERMINAL_TOOL` executes shell commands. It is **off by default**; when
+  on, input is `shlex`-tokenised, shell metacharacters are rejected, and only an
+  exact-match allowlist runs — there is no `shell=True` anywhere.
+- Uploaded filenames are stripped of both `/` and `\` path components, so a
+  traversal attempt cannot escape the upload directory.
+- `SECRET_KEY` must be changed before running with `DEBUG=false`; startup refuses
+  otherwise.
+- The `admin` / `admin123` demo account is seeded only when `DEBUG=true`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
