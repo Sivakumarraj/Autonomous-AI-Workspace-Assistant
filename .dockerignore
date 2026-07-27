@@ -1,0 +1,38 @@
+# Keep the build context small and keep secrets out of images.
+.git
+.github
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/venv
+**/.pytest_cache
+**/.ruff_cache
+backend/tests
+
+# Node
+**/node_modules
+**/.next
+**/out
+
+# Runtime data — never bake local databases or uploads into an image
+backend/data
+data
+uploads
+vector_store
+logs
+database
+**/*.db
+**/*.sqlite3
+
+# Docs and editor cruft
+docs
+*.md
+!README.md
+.idea
+.vscode
+.DS_Store

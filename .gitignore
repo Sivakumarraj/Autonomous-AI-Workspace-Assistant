@@ -13,12 +13,14 @@ out/
 dist/
 build/
 *.egg-info/
+next-env.d.ts
 
-# Environment
+# Environment — never commit real secrets.
+# Only the .example templates are tracked.
 .env
-.env.local
-.env.production
-!backend/.env
+.env.*
+!.env.example
+!**/.env.example
 
 # IDE
 .idea/
@@ -31,32 +33,23 @@ build/
 .DS_Store
 Thumbs.db
 
+# Runtime data (SQLite, ChromaDB, uploads, logs all live under backend/data)
+backend/data/
+data/
+uploads/
+vector_store/
+logs/
+database/
+
 # Logs
-logs/*.log
 *.log
-
-# Uploads (keep directory structure)
-uploads/pdfs/*
-uploads/docs/*
-uploads/images/*
-uploads/temp/*
-!uploads/pdfs/.gitkeep
-!uploads/docs/.gitkeep
-!uploads/images/.gitkeep
-!uploads/temp/.gitkeep
-
-# Vector store data
-vector_store/*
-!vector_store/.gitkeep
 
 # Database
 *.db
 *.sqlite3
-node_modules/
-.next/
-.env
-.env.local
-__pycache__/
-uploads/
-vector_store/
-logs/
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage

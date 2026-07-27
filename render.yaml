@@ -1,0 +1,53 @@
+# Render Blueprint for the Nexus AI Workspace backend.
+#
+# Deploy: Render dashboard -> New -> Blueprint -> point at this repository.
+# Then set the two secret values in the service's Environment tab:
+#   GEMINI_API_KEY  - from https://aistudio.google.com/apikey
+#   SECRET_KEY      - use "Generate" for a random value
+#
+# The frontend deploys separately to Vercel (see frontend/vercel.json).
+
+services:
+  - type: web
+    name: nexus-ai-backend
+    runtime: docker
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+
+    # SQLite and ChromaDB both live on this disk. Without it every deploy
+    # would start with an empty database.
+    # NOTE: Render does not allow more than one instance to mount a disk, so
+    # this service must stay at a single instance. Move to Postgres + a hosted
+    # vector store before scaling horizontally.
+    disk:
+      name: nexus-data
+      mountPath: /data
+      sizeGB: 1
+
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+
+      # Set in the dashboard, not in git.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+
+      # Must list the deployed frontend's exact origin — a wildcard cannot be
+      # combined with credentialed requests.
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+      # Both execute untrusted input server-side; keep them off in production.
+      - key: ENABLE_TERMINAL_TOOL
+        value: "false"
+      - key: ENABLE_BROWSER_TOOL
+        value: "false"
