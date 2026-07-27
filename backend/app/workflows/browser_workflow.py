@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from app.core.logging import get_logger
 from app.tools.browser_tool import browser_tool
@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 
 
 class BrowserWorkflow:
-    async def run(self, task: str) -> Dict[str, Any]:
+    async def run(self, task: str) -> dict[str, Any]:
         task_l = task.lower().strip()
         logger.info("Running browser workflow", extra={"task": task})
 

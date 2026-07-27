@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
@@ -17,10 +17,10 @@ class BrowserConfig:
 
 
 class BrowserTool:
-    def __init__(self, config: Optional[BrowserConfig] = None) -> None:
+    def __init__(self, config: BrowserConfig | None = None) -> None:
         self.config = config or BrowserConfig()
 
-    async def google_search(self, query: str, max_results: Optional[int] = None) -> List[Dict[str, str]]:
+    async def google_search(self, query: str, max_results: int | None = None) -> list[dict[str, str]]:
         """Search Google and return lightweight structured search results."""
         limit = max_results or self.config.max_results
 
@@ -35,7 +35,7 @@ class BrowserTool:
 
                 cards = page.locator("div#search div.g")
                 count = await cards.count()
-                results: List[Dict[str, str]] = []
+                results: list[dict[str, str]] = []
 
                 for idx in range(count):
                     if len(results) >= limit:
@@ -53,7 +53,7 @@ class BrowserTool:
             finally:
                 await browser.close()
 
-    async def extract_webpage(self, url: str) -> Dict[str, Any]:
+    async def extract_webpage(self, url: str) -> dict[str, Any]:
         """Extract clean webpage metadata and visible text."""
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=self.config.headless)
@@ -73,7 +73,7 @@ class BrowserTool:
             finally:
                 await browser.close()
 
-    async def summarize_webpage(self, url: str, max_chars: int = 1000) -> Dict[str, Any]:
+    async def summarize_webpage(self, url: str, max_chars: int = 1000) -> dict[str, Any]:
         """Produce simple extractive summary from a webpage."""
         page_data = await self.extract_webpage(url)
         content = page_data.get("content", "")
