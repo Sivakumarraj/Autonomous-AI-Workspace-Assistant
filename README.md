@@ -11,16 +11,19 @@ generation, and keep persistent memory across conversations.
 
 | Feature | State | Notes |
 |---|---|---|
-| **Document upload** | Working | PDF / TXT / MD, streamed to disk with a size cap and an extension allowlist |
+| **Document upload** | Working | Drag-and-drop with per-file progress, PDF / TXT / MD, size cap and extension allowlist enforced while streaming |
 | **RAG pipeline** | Working | Extract → chunk (with overlap) → embed via `gemini-embedding-001` → ChromaDB → retrieve top-k |
-| **Chat** | Working | Gemini 2.5 Flash, automatically switches to RAG mode when the question is about your documents |
-| **Memory** | Working | Facts are auto-extracted from chat, deduplicated, persisted, and recalled on later turns |
-| **Dashboard / Logs** | Working | Live counters and an activity trail, all read from the database |
-| **Workflows** | Partial | Full CRUD and persistence; the execution engine handles file listing only |
+| **Chat** | Working | Gemini 2.5 Flash, switches to RAG automatically, shows retrieval mode and expandable source chunks |
+| **Memory** | Working | Auto-extracted from chat, deduplicated, plus manual create/delete and category filtering in the UI |
+| **Workflows** | Working (UI) | Create, pause, resume, step progress, and delete — all persisted. The *execution* engine still only handles file listing |
+| **Dashboard / Logs** | Working | Live counters, activity feed, level and category filters, optional auto-refresh |
+| **Settings** | Working | Read-only view of live server config plus local preferences. Deliberately has no API-key field — a key typed into a browser cannot reach the backend safely |
+| **Command palette** | Working | ⌘K / Ctrl+K, fuzzy search across files, memories, workflows, and logs |
+| **Themes** | Working | Dark by default, light opt-in, applied before first paint so there is no flash |
 | **Auth** | Available, not enforced | Real JWT + bcrypt at `/auth/*`. App routes are public so the demo works without a login — add `Depends(get_current_user)` to lock them down |
 | **Browser automation** | Scaffolded | Playwright tool exists behind `ENABLE_BROWSER_TOOL`; off by default |
 | **Agents** (`app/agents/`) | Scaffolded | `browser_agent`, `memory_agent`, `rag_agent`, `workflow_agent` return placeholder values. The working RAG and memory paths are in `app/rag/` and `app/memory/` |
-| **Chat history sidebar** | Mock | No conversations endpoint yet; seeded from `utils/constants.ts` |
+| **Chat history** | Not built | Conversations are per-session; there is no persistence endpoint for them yet |
 
 ---
 
@@ -150,13 +153,29 @@ either convention works for `NEXT_PUBLIC_API_URL`.
 ```bash
 cd backend
 pip install -r requirements-dev.txt
-pytest              # 56 tests
+pytest              # 60 tests
 ruff check app tests
 ```
 
 The suite runs with **no API key configured** on purpose: that proves the app
 still boots and serves its whole non-AI surface. It covers path traversal,
-command injection, JWT forgery and expiry, upload limits, and chunking edges.
+command injection, JWT forgery and expiry, upload limits, chunking edges, and
+that `GET /settings` never leaks a credential.
+
+### End-to-end UI verification
+
+`scripts/verify_ui.py` drives the real app in Chromium and exercises **every
+interactive control**, not just page loads — upload and delete a file, create /
+pause / resume / step / delete a workflow, create and delete a memory, toggle
+log filters, open the command palette and navigate by keyboard, flip the theme,
+send a chat message, and repeat the sweep at 390px checking the mobile drawer
+and horizontal overflow. It fails on any console error or any failed request.
+
+```bash
+# with both servers running
+python scripts/verify_ui.py --frontend http://localhost:3000 \
+                            --backend  http://localhost:8000
+```
 
 CI (`.github/workflows/ci.yml`) runs backend lint + tests, frontend lint + build,
 and builds both Docker images on every push.
