@@ -1,41 +1,56 @@
-"""
-Logging configuration for the application
-"""
+"""Logging configuration."""
 
 import logging
-import os
-from datetime import datetime
-from app.core.config import settings
+import sys
+from datetime import UTC, datetime
+from logging.handlers import RotatingFileHandler
+
+_CONFIGURED = False
+
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 
 
-def setup_logging():
-    """Configure application logging"""
+def setup_logging() -> None:
+    """Configure root logging. Idempotent — safe to call from the lifespan."""
+    global _CONFIGURED
+    if _CONFIGURED:
+        return
+
+    # Imported lazily so this module stays importable from app.core.config's
+    # dependents without a circular import.
+    from app.core.config import settings
+
     log_dir = settings.LOG_DIR
-    os.makedirs(log_dir, exist_ok=True)
-    os.makedirs(os.path.join(log_dir, "api_logs"), exist_ok=True)
-    os.makedirs(os.path.join(log_dir, "workflow_logs"), exist_ok=True)
-    os.makedirs(os.path.join(log_dir, "error_logs"), exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
-    # Root logger
-    logging.basicConfig(
-        level=getattr(logging, settings.LOG_LEVEL),
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(
-                os.path.join(log_dir, f"app_{datetime.now().strftime('%Y%m%d')}.log")
-            ),
-        ],
+    formatter = logging.Formatter(LOG_FORMAT)
+    root = logging.getLogger()
+    root.setLevel(getattr(logging, settings.LOG_LEVEL, logging.INFO))
+
+    # stdout is the only stream most container platforms collect.
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+    root.addHandler(stream_handler)
+
+    today = datetime.now(UTC).strftime("%Y%m%d")
+
+    # Rotating, so a long-running container cannot fill its disk with logs.
+    app_handler = RotatingFileHandler(
+        log_dir / f"app_{today}.log", maxBytes=10 * 1024 * 1024, backupCount=3
     )
+    app_handler.setFormatter(formatter)
+    root.addHandler(app_handler)
 
-    # Error logger
-    error_handler = logging.FileHandler(
-        os.path.join(log_dir, "error_logs", f"errors_{datetime.now().strftime('%Y%m%d')}.log")
+    error_handler = RotatingFileHandler(
+        log_dir / f"errors_{today}.log", maxBytes=10 * 1024 * 1024, backupCount=3
     )
     error_handler.setLevel(logging.ERROR)
-    logging.getLogger().addHandler(error_handler)
+    error_handler.setFormatter(formatter)
+    root.addHandler(error_handler)
+
+    _CONFIGURED = True
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Get a named logger"""
+    """Get a named logger."""
     return logging.getLogger(name)

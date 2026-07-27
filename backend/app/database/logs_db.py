@@ -1,51 +1,61 @@
-import sqlite3, os
-from datetime import datetime
+"""Persistence for system activity logs."""
 
-DB_PATH = "database/nexus.db"
-os.makedirs("database", exist_ok=True)
+from datetime import datetime, timezone
+from typing import Dict, List
 
-def init_logs_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event TEXT NOT NULL,
-            category TEXT DEFAULT 'System',
-            level TEXT DEFAULT 'info',
-            created_at TEXT
+from app.database.connection import get_conn
+
+COLUMNS = "id, event, category, level, created_at"
+
+
+def _row_to_dict(row) -> Dict:
+    return {
+        "id": row["id"],
+        "event": row["event"],
+        "category": row["category"] or "System",
+        "level": row["level"] or "info",
+        "created_at": row["created_at"] or "",
+    }
+
+
+def add_log(category: str, event: str, level: str = "info") -> Dict:
+    """Record an activity log entry. Note the (category, event) argument order."""
+    with get_conn() as conn:
+        cursor = conn.execute(
+            "INSERT INTO logs (event, category, level, created_at) VALUES (?,?,?,?)",
+            (event, category, level, datetime.now(timezone.utc).isoformat()),
         )
-    """)
-    conn.commit()
-    conn.close()
+        row = conn.execute(
+            f"SELECT {COLUMNS} FROM logs WHERE id = ?", (cursor.lastrowid,)
+        ).fetchone()
 
-def add_log(category: str, event: str, level: str = "info"):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        "INSERT INTO logs (event, category, level, created_at) VALUES (?,?,?,?)",
-        (event, category, level, datetime.now().isoformat())
-    )
-    conn.commit()
-    conn.close()
+    return _row_to_dict(row)
 
-def save_log(event: str, category: str = "System", level: str = "info"):
-    add_log(category, event, level)
 
-def get_logs(limit: int = 50):
-    conn = sqlite3.connect(DB_PATH)
-    rows = conn.execute(
-        "SELECT id, event, category, level, created_at FROM logs ORDER BY id DESC LIMIT ?",
-        (limit,)
-    ).fetchall()
-    conn.close()
-    return [{"id": r[0], "event": r[1], "category": r[2], "level": r[3], "created_at": r[4]} for r in rows]
+def save_log(event: str, category: str = "System", level: str = "info") -> Dict:
+    """Same as add_log with (event, category) ordering, kept for existing callers."""
+    return add_log(category, event, level)
 
-def get_logs_today_count():
-    conn = sqlite3.connect(DB_PATH)
-    today = datetime.now().strftime("%Y-%m-%d")
-    count = conn.execute(
-        "SELECT COUNT(*) FROM logs WHERE created_at LIKE ?", (f"{today}%",)
-    ).fetchone()[0]
-    conn.close()
-    return count
 
-init_logs_db()
+def get_logs(limit: int = 50) -> List[Dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT {COLUMNS} FROM logs ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+
+    return [_row_to_dict(row) for row in rows]
+
+
+def get_logs_today_count() -> int:
+    # Timestamps are written in UTC, so the day boundary must be UTC too.
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM logs WHERE created_at LIKE ?", (f"{today}%",)
+        ).fetchone()[0]
+
+
+def get_logs_count() -> int:
+    with get_conn() as conn:
+        return conn.execute("SELECT COUNT(*) FROM logs").fetchone()[0]

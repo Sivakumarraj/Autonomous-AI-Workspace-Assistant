@@ -1,14 +1,37 @@
-import os
-from dotenv import load_dotenv
-from google import genai
+"""Gemini text-generation service."""
 
-load_dotenv()
+from anyio import to_thread
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+from app.core.clients import get_gemini_client
+from app.core.config import settings
+from app.core.exceptions import AIUnavailableError
+from app.core.logging import get_logger
 
-async def generate_response(message: str):
+logger = get_logger(__name__)
+
+
+def _generate_sync(prompt: str) -> str:
+    client = get_gemini_client()
+
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=message
+        model=settings.GEMINI_MODEL,
+        contents=prompt,
     )
-    return response.text
+
+    return response.text or ""
+
+
+async def generate_response(prompt: str) -> str:
+    """Generate a reply from Gemini.
+
+    The google-genai SDK call is synchronous, so it runs in a worker thread —
+    calling it directly from an async handler would block the event loop and
+    stall every other in-flight request.
+    """
+    try:
+        return await to_thread.run_sync(_generate_sync, prompt)
+    except AIUnavailableError:
+        raise
+    except Exception as exc:
+        logger.exception("Gemini generation failed")
+        raise AIUnavailableError(f"Gemini request failed: {exc}") from exc

@@ -1,15 +1,16 @@
 """Indexing module for RAG pipeline"""
 
-from typing import Dict, Any
+from typing import Any
+
+from app.core.logging import get_logger
 from app.rag.embedding_pipeline import embedding_pipeline
 from app.services.vector_service import vector_service
-from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class Indexer:
-    async def index_document(self, doc_id: str, text: str) -> Dict[str, Any]:
+    async def index_document(self, doc_id: str, text: str) -> dict[str, Any]:
         """Index a document for retrieval"""
         logger.info(f"Indexing document: {doc_id}")
         chunks = await embedding_pipeline.process_document(text, doc_id)

@@ -1,43 +1,113 @@
-import sqlite3, os
-from datetime import datetime
+"""Persistence for workflow definitions and their progress."""
 
-DB_PATH = "database/nexus.db"
-os.makedirs("database", exist_ok=True)
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
 
-def init_workflow_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS workflows (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            status TEXT DEFAULT 'active',
-            steps_total INTEGER DEFAULT 0,
-            steps_done INTEGER DEFAULT 0,
-            created_at TEXT
+from app.database.connection import get_conn
+
+COLUMNS = "id, name, description, status, steps_total, steps_done, created_at"
+
+
+def _row_to_dict(row) -> Dict:
+    steps_total = row["steps_total"] or 0
+    steps_done = row["steps_done"] or 0
+
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": row["description"] or "",
+        "status": row["status"] or "active",
+        "steps_total": steps_total,
+        "steps_done": steps_done,
+        "progress": round(steps_done / steps_total * 100) if steps_total else 0,
+        "created_at": row["created_at"] or "",
+    }
+
+
+def add_workflow(
+    name: str,
+    steps_total: int = 0,
+    description: str = "",
+    status: str = "active",
+) -> Dict:
+    with get_conn() as conn:
+        cursor = conn.execute(
+            "INSERT INTO workflows "
+            "(name, description, status, steps_total, steps_done, created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (
+                name,
+                description,
+                status,
+                steps_total,
+                0,
+                datetime.now(timezone.utc).isoformat(),
+            ),
         )
-    """)
-    conn.commit()
-    conn.close()
+        row = conn.execute(
+            f"SELECT {COLUMNS} FROM workflows WHERE id = ?", (cursor.lastrowid,)
+        ).fetchone()
 
-def add_workflow(name: str, steps_total: int = 0):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(
-        "INSERT INTO workflows (name, status, steps_total, steps_done, created_at) VALUES (?,?,?,?,?)",
-        (name, "active", steps_total, 0, datetime.now().isoformat())
-    )
-    conn.commit()
-    conn.close()
+    return _row_to_dict(row)
 
-def get_workflows():
-    conn = sqlite3.connect(DB_PATH)
-    rows = conn.execute("SELECT id, name, status, steps_total, steps_done, created_at FROM workflows ORDER BY id DESC").fetchall()
-    conn.close()
-    return [{"id": r[0], "name": r[1], "status": r[2], "steps_total": r[3], "steps_done": r[4], "created_at": r[5]} for r in rows]
 
-def get_active_workflows_count():
-    conn = sqlite3.connect(DB_PATH)
-    count = conn.execute("SELECT COUNT(*) FROM workflows WHERE status='active'").fetchone()[0]
-    conn.close()
-    return count
+def get_workflows() -> List[Dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT {COLUMNS} FROM workflows ORDER BY id DESC"
+        ).fetchall()
 
-init_workflow_db()
+    return [_row_to_dict(row) for row in rows]
+
+
+def get_workflow(workflow_id: int) -> Optional[Dict]:
+    with get_conn() as conn:
+        row = conn.execute(
+            f"SELECT {COLUMNS} FROM workflows WHERE id = ?", (workflow_id,)
+        ).fetchone()
+
+    return _row_to_dict(row) if row else None
+
+
+def update_workflow(workflow_id: int, **fields) -> Optional[Dict]:
+    """Update any of name/description/status/steps_total/steps_done."""
+    allowed = {"name", "description", "status", "steps_total", "steps_done"}
+    updates = {key: value for key, value in fields.items() if key in allowed}
+
+    if not updates:
+        return get_workflow(workflow_id)
+
+    assignments = ", ".join(f"{key} = ?" for key in updates)
+    params = list(updates.values()) + [workflow_id]
+
+    with get_conn() as conn:
+        cursor = conn.execute(
+            f"UPDATE workflows SET {assignments} WHERE id = ?", params
+        )
+        if cursor.rowcount == 0:
+            return None
+        row = conn.execute(
+            f"SELECT {COLUMNS} FROM workflows WHERE id = ?", (workflow_id,)
+        ).fetchone()
+
+    return _row_to_dict(row)
+
+
+def delete_workflow(workflow_id: int) -> bool:
+    with get_conn() as conn:
+        cursor = conn.execute("DELETE FROM workflows WHERE id = ?", (workflow_id,))
+        return cursor.rowcount > 0
+
+
+def get_active_workflows_count() -> int:
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM workflows WHERE status = 'active'"
+        ).fetchone()[0]
+
+
+def get_completed_workflows_count() -> int:
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM workflows WHERE status = 'completed'"
+        ).fetchone()[0]
