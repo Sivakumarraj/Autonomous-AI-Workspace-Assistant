@@ -22,6 +22,7 @@ from app.api.routes.dashboard import router as dashboard_router  # noqa: E402
 from app.api.routes.files import router as files_router  # noqa: E402
 from app.api.routes.logs import router as logs_router  # noqa: E402
 from app.api.routes.memory import router as memory_router  # noqa: E402
+from app.api.routes.settings import router as settings_router  # noqa: E402
 from app.api.routes.workflows import router as workflows_router  # noqa: E402
 from app.core.config import DEFAULT_SECRET_KEY, settings  # noqa: E402
 from app.core.exceptions import WorkspaceError  # noqa: E402
@@ -166,6 +167,7 @@ ROUTERS = (
     (files_router, "", ["files"]),
     (dashboard_router, "", ["dashboard"]),
     (logs_router, "", ["logs"]),
+    (settings_router, "", ["settings"]),
     (memory_router, "/memory", ["memory"]),
     (workflows_router, "/workflows", ["workflows"]),
     (auth_router, "/auth", ["auth"]),
