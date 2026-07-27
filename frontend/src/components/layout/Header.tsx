@@ -1,106 +1,103 @@
 'use client';
 
-import { Search, Bell, Sun } from 'lucide-react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import Link from 'next/link';
+import { Bell, Menu, Moon, Search, Sun } from 'lucide-react';
+import { useTheme } from '@/components/providers/ThemeProvider';
+import { apiGet } from '@/services/api';
 
-export default function Header() {
+interface HeaderProps {
+  onOpenPalette: () => void;
+  onOpenMenu: () => void;
+}
+
+// Platform never changes, so there is nothing to subscribe to. Reading it via
+// useSyncExternalStore keeps the server render ("Ctrl") and the client render
+// consistent without syncing it into state from an effect.
+const noopSubscribe = () => () => {};
+const getIsMac = () =>
+  /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const getIsMacServer = () => false;
+
+/**
+ * Every control here used to be decorative — the search box, bell, and theme
+ * toggle had no handlers at all. All three now do something real.
+ */
+export default function Header({ onOpenPalette, onOpenMenu }: HeaderProps) {
+  const { theme, toggleTheme } = useTheme();
+  const [logsToday, setLogsToday] = useState<number | null>(null);
+  const isMac = useSyncExternalStore(noopSubscribe, getIsMac, getIsMacServer);
+
+  // The bell badge shows a real number instead of a static dot.
+  const loadCount = useCallback(async () => {
+    try {
+      const stats = await apiGet<{ logs_today: number }>('/dashboard/stats');
+      setLogsToday(stats.logs_today);
+    } catch {
+      setLogsToday(null);
+    }
+  }, []);
+
+  // One-shot fetch on mount; state is only set after the request resolves.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadCount(); }, [loadCount]);
+
   return (
-    <header
-      style={{
-        height: '56px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 28px',
-        borderBottom: '1px solid #1e1e3a',
-        backgroundColor: '#0a0a1a',
-        position: 'sticky',
-        top: 0,
-        zIndex: 40,
-      }}
-    >
-      {/* Search Bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          backgroundColor: '#141428',
-          borderRadius: '10px',
-          padding: '8px 16px',
-          width: '360px',
-          border: '1px solid #1e1e3a',
-        }}
+    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface-sunken px-4 sm:px-6">
+      <button
+        onClick={onOpenMenu}
+        aria-label="Open navigation"
+        className="cursor-pointer rounded-lg p-2 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink md:hidden"
       >
-        <Search size={16} color="#555577" />
-        <input
-          type="text"
-          placeholder="Search workspace..."
-          style={{
-            background: 'none',
-            border: 'none',
-            outline: 'none',
-            color: '#8888aa',
-            fontSize: '14px',
-            width: '100%',
-          }}
-        />
-      </div>
+        <Menu size={19} />
+      </button>
 
-      {/* Right Section */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      {/* A button, not an input: it opens the palette, which owns the real field. */}
+      <button
+        onClick={onOpenPalette}
+        aria-label="Search workspace"
+        className="flex flex-1 cursor-pointer items-center gap-2.5 rounded-[var(--radius-control)] border border-line bg-surface-raised px-4 py-2 text-left transition-colors hover:border-line-strong sm:max-w-md"
+      >
+        <Search size={15} className="shrink-0 text-ink-subtle" />
+        <span className="flex-1 truncate text-sm text-ink-subtle">
+          Search workspace…
+        </span>
+        <kbd className="hidden shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-subtle sm:block">
+          {isMac ? '⌘' : 'Ctrl'}K
+        </kbd>
+      </button>
+
+      <div className="ml-auto flex items-center gap-1.5">
         <button
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: '#8888aa',
-            padding: '6px',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'color 0.2s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#8888aa')}
+          onClick={toggleTheme}
+          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          className="cursor-pointer rounded-lg p-2 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink"
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+
+        <Link
+          href="/logs"
+          aria-label={
+            logsToday === null
+              ? 'View logs'
+              : `View logs, ${logsToday} events today`
+          }
+          title="Today's activity"
+          className="relative cursor-pointer rounded-lg p-2 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink"
         >
           <Bell size={18} />
-        </button>
-        <button
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: '#8888aa',
-            padding: '6px',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'color 0.2s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#8888aa')}
-        >
-          <Sun size={18} />
-        </button>
-        <div
-          style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #6c5ce7, #a855f7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '12px',
-            fontWeight: 600,
-            color: '#fff',
-            cursor: 'pointer',
-          }}
-        >
+          {logsToday !== null && logsToday > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
+              {logsToday > 99 ? '99+' : logsToday}
+            </span>
+          )}
+        </Link>
+
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-accent to-[#a855f7] text-xs font-semibold text-white">
           AI
-        </div>
+        </span>
       </div>
     </header>
   );

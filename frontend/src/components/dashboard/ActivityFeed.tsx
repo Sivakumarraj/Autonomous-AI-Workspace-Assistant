@@ -1,12 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Upload, MessageSquare, GitBranch, Brain, Activity, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Activity,
+  Brain,
+  GitBranch,
+  MessageSquare,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import Card from '@/components/ui/Card';
+import EmptyState from '@/components/ui/EmptyState';
+import Skeleton from '@/components/ui/Skeleton';
 import { apiGet } from '@/services/api';
 import type { LogEntry } from '@/types/workflow';
 
-const iconMap: Record<string, LucideIcon> = {
+const ICONS: Record<string, LucideIcon> = {
   upload: Upload,
   chat: MessageSquare,
   workflow: GitBranch,
@@ -32,80 +42,72 @@ function relativeTime(iso: string): string {
 export default function ActivityFeed() {
   const [items, setItems] = useState<LogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    apiGet<{ activity: LogEntry[] }>('/dashboard/activity')
-      .then((data) => { setItems(data.activity); setError(null); })
-      .catch((err) => setError(err.message));
+  const load = useCallback(async () => {
+    try {
+      const data = await apiGet<{ activity: LogEntry[] }>('/dashboard/activity');
+      setItems(data.activity);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load activity');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  // One-shot fetch on mount. The rule guards against cascading renders from
+  // repeated setState; this runs once and only sets state after the request
+  // resolves. Fetching server-side was rejected because it would make
+  // `next build` depend on the backend being reachable.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load(); }, [load]);
+
   return (
-    <div
-      style={{
-        backgroundColor: '#141428',
-        borderRadius: '12px',
-        padding: '24px',
-        border: '1px solid #1e1e3a',
-        flex: 1,
-        minWidth: 0,
-      }}
-    >
-      <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#fff', marginBottom: '4px' }}>
-        Recent Activity
-      </h3>
-      <p style={{ fontSize: '13px', color: '#666688', marginBottom: '20px' }}>
+    <Card className="min-w-0 flex-1 p-6">
+      <h3 className="text-lg font-semibold text-ink">Recent Activity</h3>
+      <p className="mt-1 mb-5 text-[13px] text-ink-muted">
         Latest actions across your workspace
       </p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {error && (
-          <p style={{ fontSize: '13px', color: '#f44336' }}>Could not load activity: {error}</p>
-        )}
-
-        {!error && items.length === 0 && (
-          <p style={{ fontSize: '13px', color: '#555577' }}>
-            No activity yet. Upload a file or start a chat.
-          </p>
-        )}
-
-        {items.map((item) => {
-          const Icon = iconMap[item.category] || Activity;
-          return (
-            <div
-              key={item.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '8px 0',
-                borderBottom: '1px solid #1a1a35',
-              }}
-            >
+      {loading ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-12" count={4} />
+        </div>
+      ) : error ? (
+        <p className="text-[13px] text-danger">Could not load activity: {error}</p>
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={Activity}
+          title="No activity yet"
+          message="Upload a file or start a chat and events will show up here."
+        />
+      ) : (
+        <div className="flex flex-col">
+          {items.map((item) => {
+            const Icon = ICONS[item.category] ?? Activity;
+            return (
               <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  backgroundColor: 'rgba(108, 92, 231, 0.1)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
+                key={item.id}
+                className="flex items-center gap-3 border-b border-line/60 py-3 last:border-b-0"
               >
-                <Icon size={16} color="#6c5ce7" />
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft">
+                  <Icon size={15} className="text-accent" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium text-ink">
+                    {item.event}
+                  </p>
+                  <p className="text-xs text-ink-subtle">{item.category}</p>
+                </div>
+                <span className="shrink-0 text-xs text-ink-subtle">
+                  {relativeTime(item.created_at)}
+                </span>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '13px', fontWeight: 500, color: '#ddd' }}>{item.event}</div>
-                <div style={{ fontSize: '12px', color: '#666688' }}>{item.category}</div>
-              </div>
-              <div style={{ fontSize: '12px', color: '#555577', flexShrink: 0 }}>
-                {relativeTime(item.created_at)}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }

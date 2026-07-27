@@ -1,143 +1,89 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { sendMessage as sendChatMessage } from '@/services/chatService';
+import { useCallback, useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { usePreferences } from '@/hooks/usePreferences';
+import { useToast } from '@/components/providers/ToastProvider';
+import ChatInput from '@/components/chat/ChatInput';
+import ChatWindow from '@/components/chat/ChatWindow';
+import type { ChatMessage } from '@/components/chat/MessageBubble';
+import Button from '@/components/ui/Button';
+import { sendMessage } from '@/services/chatService';
 
-interface ChatMessage {
-  role: 'user' | 'ai';
-  content: string;
-  mode?: string;
-  chunks?: string[];
-  isError?: boolean;
-}
+let messageId = 0;
+const nextId = () => `m${messageId++}`;
 
 export default function ChatPage() {
-  const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const { preferences } = usePreferences();
+  const { toast } = useToast();
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
-
-  const handleSend = async () => {
-    const trimmed = message.trim();
-    if (!trimmed || sending) return;
-
-    setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
-    setMessage('');
-    setSending(true);
-
-    try {
-      const data = await sendChatMessage(trimmed);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'ai',
-          content: data.response,
-          mode: data.mode,
-          chunks: data.retrieved_chunks,
-        },
+  const handleSend = useCallback(
+    async (text: string) => {
+      setMessages((current) => [
+        ...current,
+        { id: nextId(), role: 'user', content: text },
       ]);
-    } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'ai',
-          // The backend's message is far more useful than a generic string —
-          // e.g. it names a missing GEMINI_API_KEY.
-          content: error instanceof Error ? error.message : 'Request failed.',
-          isError: true,
-        },
-      ]);
-    } finally {
-      setSending(false);
-    }
-  };
+      setSending(true);
+
+      try {
+        const data = await sendMessage(text);
+
+        setMessages((current) => [
+          ...current,
+          {
+            id: nextId(),
+            role: 'assistant',
+            content: data.response,
+            mode: data.mode,
+            chunks: data.retrieved_chunks,
+          },
+        ]);
+
+        if (data.memory_saved) {
+          toast(`Remembered: ${data.memory_saved}`, 'info');
+        }
+      } catch (error) {
+        // The backend's own message is far more useful than a generic string —
+        // it names a missing GEMINI_API_KEY, for instance.
+        const message =
+          error instanceof Error ? error.message : 'Request failed.';
+        setMessages((current) => [
+          ...current,
+          { id: nextId(), role: 'assistant', content: message, isError: true },
+        ]);
+      } finally {
+        setSending(false);
+      }
+    },
+    [toast],
+  );
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">AI Workspace Chat</h1>
-
-        <div
-          ref={scrollRef}
-          className="border border-zinc-800 rounded-xl p-4 h-[500px] overflow-y-auto bg-zinc-900 mb-4"
-        >
-          {messages.length === 0 && (
-            <p className="text-zinc-500">
-              Start chatting with Gemini. Upload a document first and ask about it
-              to see retrieval in action.
-            </p>
-          )}
-
-          <div className="space-y-4">
-            {messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`p-3 rounded-xl max-w-[80%] ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600 ml-auto'
-                    : msg.isError
-                      ? 'bg-red-900/50 border border-red-700'
-                      : 'bg-zinc-800'
-                }`}
-              >
-                <p className="text-sm mb-1 font-semibold">
-                  {msg.role === 'user' ? 'You' : 'AI'}
-                  {msg.mode && msg.mode !== 'general' && (
-                    <span className="ml-2 text-xs font-normal text-purple-300">
-                      via {msg.mode}
-                    </span>
-                  )}
-                </p>
-
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-
-                {msg.chunks && msg.chunks.length > 0 && (
-                  <details className="mt-2 text-xs text-zinc-400">
-                    <summary className="cursor-pointer">
-                      {msg.chunks.length} source chunk
-                      {msg.chunks.length === 1 ? '' : 's'}
-                    </summary>
-                    <div className="mt-2 space-y-2">
-                      {msg.chunks.map((chunk, i) => (
-                        <p key={i} className="whitespace-pre-wrap border-l-2 border-zinc-700 pl-2">
-                          {chunk}
-                        </p>
-                      ))}
-                    </div>
-                  </details>
-                )}
-              </div>
-            ))}
-
-            {sending && <p className="text-zinc-500 text-sm">AI is thinking...</p>}
-          </div>
+    <div className="flex h-full flex-col p-6 sm:p-8">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-ink">AI Chat</h1>
+          <p className="mt-1.5 text-[15px] text-ink-muted">
+            Answers use your uploaded documents and saved memories.
+          </p>
         </div>
 
-        <div className="flex gap-3">
-          <input
-            type="text"
-            placeholder="Type your message..."
-            className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 outline-none disabled:opacity-60"
-            value={message}
-            disabled={sending}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSend();
-            }}
-          />
+        {messages.length > 0 && (
+          <Button icon={<Trash2 size={14} />} onClick={() => setMessages([])}>
+            Clear
+          </Button>
+        )}
+      </div>
 
-          <button
-            onClick={handleSend}
-            disabled={sending || !message.trim()}
-            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 px-6 py-3 rounded-xl font-semibold"
-          >
-            {sending ? 'Sending...' : 'Send'}
-          </button>
-        </div>
+      <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-4">
+        <ChatWindow
+          messages={messages}
+          sending={sending}
+          showSources={preferences.showChatSources}
+        />
+        <ChatInput onSend={handleSend} disabled={sending} />
       </div>
     </div>
   );

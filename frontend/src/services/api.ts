@@ -69,3 +69,55 @@ export async function apiUpload<T>(endpoint: string, formData: FormData): Promis
     await fetch(apiUrl(endpoint), { method: 'POST', body: formData }),
   );
 }
+
+/**
+ * Upload with progress reporting.
+ *
+ * Uses XMLHttpRequest because `fetch` cannot report upload progress — its
+ * streaming request bodies are still not usable for this in browsers.
+ */
+export function apiUploadWithProgress<T>(
+  endpoint: string,
+  formData: FormData,
+  onProgress?: (percent: number) => void,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', apiUrl(endpoint));
+
+    request.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(Math.round((event.loaded / event.total) * 100));
+      }
+    });
+
+    request.addEventListener('load', () => {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(request.responseText);
+      } catch {
+        // Non-JSON response; handled below.
+      }
+
+      if (request.status >= 200 && request.status < 300) {
+        resolve(body as T);
+        return;
+      }
+
+      const detail =
+        (body as { detail?: string } | null)?.detail ??
+        request.statusText ??
+        `Upload failed with ${request.status}`;
+      reject(new ApiError(detail, request.status));
+    });
+
+    request.addEventListener('error', () =>
+      reject(new ApiError('Network error during upload', 0)),
+    );
+    request.addEventListener('abort', () =>
+      reject(new ApiError('Upload cancelled', 0)),
+    );
+
+    request.send(formData);
+  });
+}

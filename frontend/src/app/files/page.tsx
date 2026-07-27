@@ -1,34 +1,24 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
-import { Search } from 'lucide-react';
+
+import { useCallback, useEffect, useState } from 'react';
+import { FileText, Search } from 'lucide-react';
+import { useToast } from '@/components/providers/ToastProvider';
 import FileCard from '@/components/files/FileCard';
-import FileUpload from '@/components/files/FileUpload';
+import FileUpload, { UploadButton } from '@/components/files/FileUpload';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import EmptyState from '@/components/ui/EmptyState';
+import { SkeletonCards } from '@/components/ui/Skeleton';
 import { fileService } from '@/services/fileService';
 import type { FileItem } from '@/types/file';
-
-function formatSize(bytes: number): string {
-  if (!bytes) return '-';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const exponent = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
-  );
-  return `${(bytes / 1024 ** exponent).toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
-}
-
-function extensionOf(filename: string): string {
-  return filename.split('.').pop()?.toLowerCase() ?? 'txt';
-}
 
 export default function FilesPage() {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingDelete, setPendingDelete] = useState<FileItem | null>(null);
+  const { toast } = useToast();
 
-  // Nothing sets state before the first await, so this is safe to call from an
-  // effect (react-hooks/set-state-in-effect).
   const loadFiles = useCallback(async () => {
     try {
       const data = await fileService.getFiles();
@@ -48,61 +38,104 @@ export default function FilesPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadFiles(); }, [loadFiles]);
 
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const target = pendingDelete;
+    setPendingDelete(null);
+
+    // Optimistic: drop it immediately, restore if the request fails.
+    setFiles((current) => current.filter((f) => f.id !== target.id));
+
+    try {
+      await fileService.deleteFile(target.id);
+      toast(`${target.filename} deleted`, 'success');
+      await loadFiles();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Delete failed', 'error');
+      await loadFiles();
+    }
+  };
+
   const filtered = files.filter((f) =>
     f.filename.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
-    <div style={{ padding: '32px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' }}>
+    <div className="p-6 sm:p-8">
+      <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: '32px', fontWeight: 700, color: '#fff', marginBottom: '6px' }}>File Manager</h1>
-          <p style={{ fontSize: '15px', color: '#666688' }}>Manage documents and data available to your AI.</p>
+          <h1 className="text-3xl font-bold text-ink">File Manager</h1>
+          <p className="mt-1.5 text-[15px] text-ink-muted">
+            Upload documents to make them searchable by the assistant.
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '10px', backgroundColor: '#141428', border: '1px solid #1e1e3a', width: '220px' }}>
-            <Search size={14} color="#555577" />
-            <input type="text" placeholder="Search files..." value={searchQuery}
+
+        <div className="flex items-center gap-3">
+          <label className="flex w-56 items-center gap-2 rounded-[var(--radius-control)] border border-line bg-surface-raised px-4 py-2">
+            <Search size={14} className="shrink-0 text-ink-subtle" />
+            <input
+              type="text"
+              placeholder="Search files…"
+              aria-label="Search files"
+              value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ background: 'none', border: 'none', outline: 'none', color: '#8888aa', fontSize: '13px', width: '100%' }} />
-          </div>
-          <FileUpload
-            onUpload={(result) => setNotice(result.warning ?? null)}
-            onUploadComplete={() => { setLoading(true); void loadFiles(); }}
-            onError={(message) => setError(message)}
-          />
+              className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
+            />
+          </label>
+          <UploadButton onUploaded={loadFiles} />
         </div>
       </div>
 
       {error && (
-        <div style={{ padding: '12px 16px', marginBottom: '20px', borderRadius: '10px', backgroundColor: 'rgba(244, 67, 54, 0.12)', border: '1px solid rgba(244, 67, 54, 0.3)', color: '#f44336', fontSize: '14px' }}>
+        <div className="mb-5 rounded-[var(--radius-control)] border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
           {error}
         </div>
       )}
-      {notice && (
-        <div style={{ padding: '12px 16px', marginBottom: '20px', borderRadius: '10px', backgroundColor: 'rgba(255, 152, 0, 0.12)', border: '1px solid rgba(255, 152, 0, 0.3)', color: '#ff9800', fontSize: '14px' }}>
-          {notice}
-        </div>
-      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
-        {filtered.map((file, i) => (
-          <FileCard
-            key={file.id}
-            name={file.filename}
-            size={formatSize(file.size_bytes)}
-            type={extensionOf(file.filename)}
-            status={file.status === 'ready' ? 'ready' : file.status === 'error' ? 'error' : 'processing'}
-            index={i}
-          />
-        ))}
+      <div className="mb-6">
+        <FileUpload onUploaded={loadFiles} />
       </div>
 
-      {!loading && filtered.length === 0 && (
-        <p style={{ color: '#555577', textAlign: 'center', marginTop: '48px' }}>
-          {files.length === 0 ? 'No files uploaded yet.' : 'No files match your search.'}
-        </p>
+      {loading ? (
+        <SkeletonCards count={4} />
+      ) : filtered.length > 0 ? (
+        <div
+          data-testid="file-grid"
+          className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-4"
+        >
+          {filtered.map((file, i) => (
+            <FileCard
+              key={file.id}
+              file={file}
+              index={i}
+              onDelete={setPendingDelete}
+            />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          icon={FileText}
+          title={files.length === 0 ? 'No files yet' : 'No matches'}
+          message={
+            files.length === 0
+              ? 'Drop a PDF, TXT, or Markdown file above. It will be chunked, embedded, and made searchable in chat.'
+              : `Nothing matches “${searchQuery}”.`
+          }
+        />
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete file?"
+        message={
+          pendingDelete
+            ? `“${pendingDelete.filename}” and its ${pendingDelete.chunk_count} indexed chunks will be permanently removed. This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

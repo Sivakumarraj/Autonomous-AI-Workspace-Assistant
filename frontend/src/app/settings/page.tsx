@@ -1,248 +1,329 @@
 'use client';
 
-import { useState } from 'react';
-import { Save, Settings2, Brain, Key } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  Check,
+  Cpu,
+  Layers,
+  Monitor,
+  Server,
+  ShieldCheck,
+  X,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { cn } from '@/lib/cn';
+import { usePreferences } from '@/hooks/usePreferences';
+import { useTheme } from '@/components/providers/ThemeProvider';
+import { useToast } from '@/components/providers/ToastProvider';
+import Badge from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
+import Card from '@/components/ui/Card';
+import Skeleton from '@/components/ui/Skeleton';
+import { getServerSettings, type ServerSettings } from '@/services/settingsService';
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-line/60 py-3 last:border-b-0">
+      <span className="text-sm text-ink-muted">{label}</span>
+      <span className="text-right text-sm font-medium text-ink">{children}</span>
+    </div>
+  );
+}
+
+function Flag({
+  on,
+  onLabel = 'Enabled',
+  offLabel = 'Disabled',
+}: {
+  on: boolean;
+  onLabel?: string;
+  offLabel?: string;
+}) {
+  return (
+    <Badge
+      tone={on ? 'success' : 'neutral'}
+      icon={on ? <Check size={11} /> : <X size={11} />}
+    >
+      {on ? onLabel : offLabel}
+    </Badge>
+  );
+}
+
+function Section({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="mb-5 p-7">
+      <div className="mb-1.5 flex items-center gap-2.5">
+        <Icon size={19} className="text-accent" />
+        <h2 className="text-lg font-semibold text-ink">{title}</h2>
+      </div>
+      <p className="mb-5 text-[13px] text-ink-muted">{description}</p>
+      {children}
+    </Card>
+  );
+}
 
 export default function SettingsPage() {
-  const [openaiKey, setOpenaiKey] = useState('sk-...');
-  const [anthropicKey, setAnthropicKey] = useState('sk-ant-...');
-  const [chatModel, setChatModel] = useState('gpt-4o');
-  const [autoLearn, setAutoLearn] = useState(true);
+  const [server, setServer] = useState<ServerSettings | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const { theme, setTheme } = useTheme();
+  const { preferences, update, reset } = usePreferences();
+  const { toast } = useToast();
+
+  const load = useCallback(async () => {
+    try {
+      setServer(await getServerSettings());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load settings');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // One-shot fetch on mount. The rule guards against cascading renders from
+  // repeated setState; this runs once and only sets state after the request
+  // resolves. Fetching server-side was rejected because it would make
+  // `next build` depend on the backend being reachable.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load(); }, [load]);
 
   return (
-    <div style={{ padding: '32px', maxWidth: '800px' }}>
-      <h1 style={{ fontSize: '32px', fontWeight: 700, color: '#fff', marginBottom: '6px' }}>
-        Settings
-      </h1>
-      <p style={{ fontSize: '15px', color: '#666688', marginBottom: '32px' }}>
-        Configure your AI workspace preferences and integrations.
+    <div className="max-w-3xl p-6 sm:p-8">
+      <h1 className="text-3xl font-bold text-ink">Settings</h1>
+      <p className="mt-1.5 mb-8 text-[15px] text-ink-muted">
+        Live server configuration and your local display preferences.
       </p>
 
-      {/* API Keys Section */}
-      <div
-        style={{
-          backgroundColor: '#141428',
-          borderRadius: '12px',
-          padding: '28px',
-          border: '1px solid #1e1e3a',
-          marginBottom: '20px',
-        }}
+      {error && (
+        <div className="mb-5 rounded-[var(--radius-control)] border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+          Could not reach the backend: {error}
+        </div>
+      )}
+
+      {/* Local preferences — these genuinely persist. */}
+      <Section
+        icon={Monitor}
+        title="Preferences"
+        description="Stored in this browser only."
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-          <Key size={20} color="#6c5ce7" />
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#fff' }}>API Keys</h2>
-        </div>
-        <p style={{ fontSize: '13px', color: '#666688', marginBottom: '24px' }}>
-          Manage your AI provider API keys for model access.
-        </p>
-
-        {/* OpenAI Key */}
-        <div style={{ marginBottom: '20px' }}>
-          <label style={{ fontSize: '14px', fontWeight: 500, color: '#ccc', display: 'block', marginBottom: '8px' }}>
-            OpenAI API Key
-          </label>
-          <input
-            type="password"
-            value={openaiKey}
-            onChange={(e) => setOpenaiKey(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '10px',
-              backgroundColor: '#1a1a35',
-              border: '1px solid #1e1e3a',
-              color: '#fff',
-              fontSize: '14px',
-              outline: 'none',
-              transition: 'border-color 0.2s',
-            }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = '#6c5ce7')}
-            onBlur={(e) => (e.currentTarget.style.borderColor = '#1e1e3a')}
-          />
-          <p style={{ fontSize: '12px', color: '#555577', marginTop: '6px' }}>
-            Used for GPT-4o and embedding generation.
-          </p>
-        </div>
-
-        {/* Anthropic Key */}
-        <div>
-          <label style={{ fontSize: '14px', fontWeight: 500, color: '#ccc', display: 'block', marginBottom: '8px' }}>
-            Anthropic API Key
-          </label>
-          <input
-            type="password"
-            value={anthropicKey}
-            onChange={(e) => setAnthropicKey(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '10px',
-              backgroundColor: '#1a1a35',
-              border: '1px solid #1e1e3a',
-              color: '#fff',
-              fontSize: '14px',
-              outline: 'none',
-              transition: 'border-color 0.2s',
-            }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = '#6c5ce7')}
-            onBlur={(e) => (e.currentTarget.style.borderColor = '#1e1e3a')}
-          />
-          <p style={{ fontSize: '12px', color: '#555577', marginTop: '6px' }}>
-            Used for Claude 3.5 Sonnet processing.
-          </p>
-        </div>
-      </div>
-
-      {/* Model Routing Section */}
-      <div
-        style={{
-          backgroundColor: '#141428',
-          borderRadius: '12px',
-          padding: '28px',
-          border: '1px solid #1e1e3a',
-          marginBottom: '20px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-          <Settings2 size={20} color="#6c5ce7" />
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#fff' }}>Model Routing</h2>
-        </div>
-        <p style={{ fontSize: '13px', color: '#666688', marginBottom: '24px' }}>
-          Configure which models are used for specific tasks.
-        </p>
-
-        <div>
-          <label style={{ fontSize: '14px', fontWeight: 500, color: '#ccc', display: 'block', marginBottom: '8px' }}>
-            Default Chat Model
-          </label>
-          <select
-            value={chatModel}
-            onChange={(e) => setChatModel(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '10px',
-              backgroundColor: '#1a1a35',
-              border: '1px solid #1e1e3a',
-              color: '#fff',
-              fontSize: '14px',
-              outline: 'none',
-              appearance: 'none',
-              cursor: 'pointer',
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238888aa' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'right 16px center',
-            }}
-          >
-            <option value="gpt-4o">GPT-4o (Recommended)</option>
-            <option value="gpt-4-turbo">GPT-4 Turbo</option>
-            <option value="claude-3.5">Claude 3.5 Sonnet</option>
-            <option value="gemini-pro">Gemini Pro</option>
-          </select>
-          <p style={{ fontSize: '12px', color: '#555577', marginTop: '6px' }}>
-            This model will be used by default for chat and standard workflows.
-          </p>
-        </div>
-      </div>
-
-      {/* Core Memory Section */}
-      <div
-        style={{
-          backgroundColor: '#141428',
-          borderRadius: '12px',
-          padding: '28px',
-          border: '1px solid #1e1e3a',
-          marginBottom: '24px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-          <Brain size={20} color="#6c5ce7" />
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#fff' }}>Core Memory</h2>
-        </div>
-        <p style={{ fontSize: '13px', color: '#666688', marginBottom: '24px' }}>
-          Control how the AI learns and remembers across sessions.
-        </p>
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '16px 20px',
-            borderRadius: '10px',
-            backgroundColor: '#1a1a35',
-            border: '1px solid #1e1e3a',
-          }}
-        >
+        <div className="flex items-center justify-between gap-4 border-b border-line/60 py-3">
           <div>
-            <div style={{ fontSize: '14px', fontWeight: 500, color: '#ddd', marginBottom: '4px' }}>
-              Autonomous Learning
-            </div>
-            <div style={{ fontSize: '13px', color: '#666688' }}>
-              Allow the AI to automatically extract facts and preferences from your conversations and save them to memory.
-            </div>
+            <p className="text-sm text-ink">Theme</p>
+            <p className="text-xs text-ink-subtle">Applies immediately.</p>
+          </div>
+          <div className="flex gap-1.5">
+            {(['dark', 'light'] as const).map((option) => (
+              <button
+                key={option}
+                onClick={() => setTheme(option)}
+                aria-pressed={theme === option}
+                className={cn(
+                  'cursor-pointer rounded-full border px-3.5 py-1.5 text-xs font-medium capitalize transition-colors',
+                  theme === option
+                    ? 'border-accent bg-accent-soft text-accent'
+                    : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
+                )}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 border-b border-line/60 py-3">
+          <div>
+            <p className="text-sm text-ink">Logs auto-refresh</p>
+            <p className="text-xs text-ink-subtle">
+              How often the Logs page reloads. Off disables polling.
+            </p>
+          </div>
+          <select
+            aria-label="Logs auto-refresh interval"
+            value={preferences.logsRefreshInterval}
+            onChange={(e) => update({ logsRefreshInterval: Number(e.target.value) })}
+            className="rounded-[var(--radius-control)] border border-line bg-surface-sunken px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+          >
+            <option value={0}>Off</option>
+            <option value={5}>5 seconds</option>
+            <option value={10}>10 seconds</option>
+            <option value={30}>30 seconds</option>
+            <option value={60}>60 seconds</option>
+          </select>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 border-b border-line/60 py-3">
+          <div>
+            <p className="text-sm text-ink">Logs page size</p>
+            <p className="text-xs text-ink-subtle">
+              Rows requested per load (server allows 1–500).
+            </p>
+          </div>
+          <select
+            aria-label="Logs page size"
+            value={preferences.logsPageSize}
+            onChange={(e) => update({ logsPageSize: Number(e.target.value) })}
+            className="rounded-[var(--radius-control)] border border-line bg-surface-sunken px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+          >
+            {[25, 50, 100, 200, 500].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 py-3">
+          <div>
+            <p className="text-sm text-ink">Show chat sources</p>
+            <p className="text-xs text-ink-subtle">
+              Expand retrieved document chunks under RAG answers.
+            </p>
           </div>
           <button
-            onClick={() => setAutoLearn(!autoLearn)}
-            style={{
-              width: '48px',
-              height: '26px',
-              borderRadius: '13px',
-              backgroundColor: autoLearn ? '#6c5ce7' : '#2a2a4a',
-              border: 'none',
-              cursor: 'pointer',
-              position: 'relative',
-              transition: 'background-color 0.3s',
-              flexShrink: 0,
-              marginLeft: '16px',
-            }}
+            role="switch"
+            aria-checked={preferences.showChatSources}
+            aria-label="Show chat sources"
+            onClick={() => update({ showChatSources: !preferences.showChatSources })}
+            className={cn(
+              'relative h-6 w-11 cursor-pointer rounded-full transition-colors',
+              preferences.showChatSources ? 'bg-accent' : 'bg-surface-hover',
+            )}
           >
-            <div
-              style={{
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                backgroundColor: '#fff',
-                position: 'absolute',
-                top: '3px',
-                left: autoLearn ? '25px' : '3px',
-                transition: 'left 0.3s',
-              }}
+            <span
+              className={cn(
+                'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform',
+                preferences.showChatSources ? 'translate-x-[22px]' : 'translate-x-0.5',
+              )}
             />
           </button>
         </div>
-      </div>
 
-      {/* Save Button */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 28px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #6c5ce7, #a855f7)',
-            border: 'none',
-            color: '#fff',
-            fontSize: '14px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.opacity = '0.9';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.opacity = '1';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
-        >
-          <Save size={16} />
-          Save Configuration
-        </button>
-      </div>
+        <div className="mt-5 flex justify-end">
+          <Button
+            onClick={() => {
+              reset();
+              toast('Preferences reset to defaults', 'success');
+            }}
+          >
+            Reset preferences
+          </Button>
+        </div>
+      </Section>
+
+      {loading ? (
+        <Skeleton className="mb-5 h-64" count={2} />
+      ) : (
+        server && (
+          <>
+            <Section
+              icon={Cpu}
+              title="AI models"
+              description="Set by server environment variables. Read-only from the browser — an API key entered here could not reach the backend safely."
+            >
+              <Row label="API key">
+                <Flag
+                  on={server.gemini_configured}
+                  onLabel="Configured"
+                  offLabel="Not set"
+                />
+              </Row>
+              <Row label="Chat model">{server.gemini_model}</Row>
+              <Row label="Embedding model">{server.embedding_model}</Row>
+              <Row label="Temperature">{server.llm_temperature}</Row>
+
+              {!server.gemini_configured && (
+                <div className="mt-4 flex items-start gap-2.5 rounded-[var(--radius-control)] border border-warn/30 bg-warn-soft p-3.5">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warn" />
+                  <p className="text-xs leading-relaxed text-ink-muted">
+                    <span className="font-medium text-warn">
+                      No GEMINI_API_KEY set.
+                    </span>{' '}
+                    Chat, embeddings, and RAG return 503 until one is configured on
+                    the server. Every other feature works normally.
+                  </p>
+                </div>
+              )}
+            </Section>
+
+            <Section
+              icon={Layers}
+              title="Retrieval"
+              description="How documents are split and searched."
+            >
+              <Row label="Chunk size">{server.chunk_size} characters</Row>
+              <Row label="Chunk overlap">{server.chunk_overlap} characters</Row>
+              <Row label="Chunks retrieved per query">{server.retrieval_top_k}</Row>
+              <Row label="Max upload size">
+                {Math.round(server.max_upload_size / (1024 * 1024))} MB
+              </Row>
+              <Row label="Accepted types">
+                {server.allowed_extensions.join(', ')}
+              </Row>
+            </Section>
+
+            <Section
+              icon={ShieldCheck}
+              title="Security"
+              description="Tools that execute untrusted input are off by default."
+            >
+              <Row label="Terminal tool">
+                <Flag on={server.terminal_tool_enabled} />
+              </Row>
+              <Row label="Browser automation">
+                <Flag on={server.browser_tool_enabled} />
+              </Row>
+              <Row label="Debug mode">
+                <Flag on={server.debug} onLabel="On" offLabel="Off" />
+              </Row>
+              <Row label="Allowed origins">
+                <span className="text-xs break-all">
+                  {server.allowed_origins.join(', ')}
+                </span>
+              </Row>
+
+              {server.terminal_tool_enabled && (
+                <div className="mt-4 flex items-start gap-2.5 rounded-[var(--radius-control)] border border-danger/30 bg-danger-soft p-3.5">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-danger" />
+                  <p className="text-xs leading-relaxed text-ink-muted">
+                    <span className="font-medium text-danger">
+                      The terminal tool is enabled.
+                    </span>{' '}
+                    It runs shell commands on the server. Set
+                    ENABLE_TERMINAL_TOOL=false on any publicly reachable deployment.
+                  </p>
+                </div>
+              )}
+            </Section>
+
+            <Section
+              icon={Server}
+              title="Server"
+              description="Identity of the backend this UI is talking to."
+            >
+              <Row label="Application">{server.app_name}</Row>
+              <Row label="Version">{server.version}</Row>
+              <Row label="API URL">
+                <span className="text-xs break-all">
+                  {process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'}
+                </span>
+              </Row>
+            </Section>
+          </>
+        )
+      )}
     </div>
   );
 }

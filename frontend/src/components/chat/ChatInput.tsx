@@ -1,70 +1,64 @@
 'use client';
 
-import { useState } from 'react';
-import { Send } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { SendHorizonal } from 'lucide-react';
+import Button from '@/components/ui/Button';
 
-interface ChatInputProps {
+export default function ChatInput({
+  onSend,
+  disabled,
+}: {
   onSend: (message: string) => void;
-  disabled?: boolean;
-}
+  disabled: boolean;
+}) {
+  const [value, setValue] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-export default function ChatInput({ onSend, disabled }: ChatInputProps) {
-  const [message, setMessage] = useState('');
+  const submit = () => {
+    const trimmed = value.trim();
+    if (!trimmed || disabled) return;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (message.trim() && !disabled) {
-      onSend(message.trim());
-      setMessage('');
-    }
+    onSend(trimmed);
+    setValue('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
   return (
-    <div style={{ padding: '16px 24px', borderTop: '1px solid #1e1e3a' }}>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Message your AI..."
-          disabled={disabled}
-          style={{
-            flex: 1,
-            padding: '12px 18px',
-            borderRadius: '12px',
-            backgroundColor: '#141428',
-            border: '1px solid #1e1e3a',
-            color: '#fff',
-            fontSize: '14px',
-            outline: 'none',
-            transition: 'border-color 0.2s',
-          }}
-          onFocus={(e) => (e.currentTarget.style.borderColor = '#6c5ce7')}
-          onBlur={(e) => (e.currentTarget.style.borderColor = '#1e1e3a')}
-        />
-        <button
-          type="submit"
-          disabled={!message.trim() || disabled}
-          style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '12px',
-            background: message.trim() ? 'linear-gradient(135deg, #6c5ce7, #a855f7)' : '#1e1e3a',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: message.trim() ? 'pointer' : 'not-allowed',
-            transition: 'all 0.2s ease',
-            flexShrink: 0,
-          }}
-        >
-          <Send size={18} color="#fff" />
-        </button>
-      </form>
-      <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '11px', color: '#555577' }}>
-        AI responses can be inaccurate. Please verify important information.
-      </div>
+    <div className="flex items-end gap-3">
+      <textarea
+        ref={textareaRef}
+        rows={1}
+        value={value}
+        disabled={disabled}
+        placeholder="Ask anything, or ask about your uploaded documents…"
+        aria-label="Message"
+        onChange={(e) => {
+          setValue(e.target.value);
+          // Grow with the content, capped so it never eats the transcript.
+          e.target.style.height = 'auto';
+          e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+        }}
+        onKeyDown={(e) => {
+          // Enter sends; Shift+Enter inserts a newline.
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        className="max-h-40 min-h-[46px] flex-1 resize-none rounded-[var(--radius-control)] border border-line bg-surface-raised px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-accent disabled:opacity-60 placeholder:text-ink-subtle"
+      />
+
+      <Button
+        variant="primary"
+        onClick={submit}
+        loading={disabled}
+        disabled={!value.trim()}
+        aria-label="Send message"
+        className="h-[46px]"
+        icon={!disabled ? <SendHorizonal size={15} /> : undefined}
+      >
+        Send
+      </Button>
     </div>
   );
 }

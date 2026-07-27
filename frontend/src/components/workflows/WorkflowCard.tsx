@@ -1,142 +1,153 @@
 'use client';
 
-import { Pause, RefreshCw } from 'lucide-react';
+import { Check, Minus, Pause, Play, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import Badge, { statusTone } from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
+import Card from '@/components/ui/Card';
 import type { Workflow } from '@/types/workflow';
 
 interface WorkflowCardProps {
   workflow: Workflow;
   index: number;
+  busy?: boolean;
+  onPause: (workflow: Workflow) => void;
+  onResume: (workflow: Workflow) => void;
+  onDelete: (workflow: Workflow) => void;
+  onStepChange: (workflow: Workflow, stepsDone: number) => void;
 }
 
-export default function WorkflowCard({ workflow, index }: WorkflowCardProps) {
-  const statusColors: Record<string, { bg: string; text: string; dot: string }> = {
-    active: { bg: 'rgba(0, 200, 83, 0.12)', text: '#00c853', dot: '#00c853' },
-    completed: { bg: 'rgba(0, 200, 83, 0.12)', text: '#00c853', dot: '#00c853' },
-    failed: { bg: 'rgba(244, 67, 54, 0.12)', text: '#f44336', dot: '#f44336' },
-    paused: { bg: 'rgba(255, 152, 0, 0.12)', text: '#ff9800', dot: '#ff9800' },
-  };
+const PROGRESS_COLOURS: Record<string, string> = {
+  active: 'bg-accent',
+  completed: 'bg-success',
+  failed: 'bg-danger',
+  paused: 'bg-warn',
+};
 
-  const colors = statusColors[workflow.status] || statusColors.active;
+export default function WorkflowCard({
+  workflow,
+  index,
+  busy = false,
+  onPause,
+  onResume,
+  onDelete,
+  onStepChange,
+}: WorkflowCardProps) {
+  const { tone, label } = statusTone(workflow.status);
+  const barColour = PROGRESS_COLOURS[workflow.status] ?? 'bg-accent';
 
-  const progressBarColor =
-    workflow.status === 'completed'
-      ? '#6c5ce7'
-      : workflow.status === 'failed'
-      ? '#f44336'
-      : workflow.status === 'active'
-      ? '#6c5ce7'
-      : '#ff9800';
+  const canDecrement = workflow.steps_done > 0;
+  const canIncrement = workflow.steps_done < workflow.steps_total;
 
   return (
-    <div
-      style={{
-        backgroundColor: '#141428',
-        borderRadius: '12px',
-        padding: '24px',
-        border: '1px solid #1e1e3a',
-        transition: 'all 0.3s ease',
-        animation: `fadeIn 0.3s ease-out ${index * 0.08}s both`,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = '#2a2a5a';
-        e.currentTarget.style.transform = 'translateY(-2px)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = '#1e1e3a';
-        e.currentTarget.style.transform = 'translateY(0)';
-      }}
-    >
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#fff', flex: 1 }}>{workflow.name}</h3>
-        <span
-          style={{
-            fontSize: '12px',
-            fontWeight: 500,
-            padding: '4px 12px',
-            borderRadius: '20px',
-            backgroundColor: colors.bg,
-            color: colors.text,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            flexShrink: 0,
-          }}
+    <Card interactive index={index} className="flex flex-col p-6">
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <h3 className="flex-1 text-base font-semibold text-ink">{workflow.name}</h3>
+        <Badge
+          tone={tone}
+          icon={
+            workflow.status === 'active' ? (
+              <RefreshCw size={10} />
+            ) : workflow.status === 'completed' ? (
+              <Check size={10} />
+            ) : workflow.status === 'failed' ? (
+              <X size={10} />
+            ) : (
+              <Pause size={10} />
+            )
+          }
         >
-          {workflow.status === 'active' && <RefreshCw size={10} />}
-          {workflow.status === 'completed' && '✓'}
-          {workflow.status === 'failed' && '✕'}
-          {workflow.status.charAt(0).toUpperCase() + workflow.status.slice(1)}
-        </span>
+          {label}
+        </Badge>
       </div>
 
-      <p style={{ fontSize: '13px', color: '#666688', marginBottom: '16px', lineHeight: 1.4 }}>
-        {workflow.description}
+      <p className="mb-4 text-[13px] leading-relaxed text-ink-muted">
+        {workflow.description || 'No description'}
       </p>
 
-      {/* Progress */}
-      <div style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-          <span style={{ fontSize: '12px', color: '#8888aa' }}>Progress</span>
-          <span style={{ fontSize: '12px', color: '#8888aa' }}>
-            {workflow.steps_done} / {workflow.steps_total} steps ({workflow.progress}%)
-          </span>
+      <div className="mb-4">
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-xs text-ink-muted">Progress</span>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => onStepChange(workflow, workflow.steps_done - 1)}
+              disabled={!canDecrement || busy}
+              aria-label="Decrease completed steps"
+              className="cursor-pointer rounded p-0.5 text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Minus size={13} />
+            </button>
+            <span className="text-xs tabular-nums text-ink-muted">
+              {workflow.steps_done} / {workflow.steps_total} steps (
+              {workflow.progress}%)
+            </span>
+            <button
+              onClick={() => onStepChange(workflow, workflow.steps_done + 1)}
+              disabled={!canIncrement || busy}
+              aria-label="Increase completed steps"
+              className="cursor-pointer rounded p-0.5 text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Plus size={13} />
+            </button>
+          </div>
         </div>
+
         <div
-          style={{
-            width: '100%',
-            height: '6px',
-            borderRadius: '3px',
-            backgroundColor: '#1e1e3a',
-            overflow: 'hidden',
-          }}
+          className="h-1.5 w-full overflow-hidden rounded-full bg-surface-hover"
+          role="progressbar"
+          aria-valuenow={workflow.progress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${workflow.name} progress`}
         >
           <div
-            style={{
-              width: `${workflow.progress}%`,
-              height: '100%',
-              borderRadius: '3px',
-              backgroundColor: progressBarColor,
-              transition: 'width 0.5s ease',
-            }}
+            data-testid="progress-fill"
+            className={`h-full rounded-full transition-[width] duration-500 ${barColour}`}
+            style={{ width: `${workflow.progress}%` }}
           />
         </div>
       </div>
 
-      {/* Footer */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '12px', color: '#555577' }}>
-          Started: {workflow.created_at ? new Date(workflow.created_at).toLocaleDateString() : '-'}
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-line pt-4">
+        <span className="text-xs text-ink-subtle">
+          {workflow.created_at
+            ? new Date(workflow.created_at).toLocaleDateString()
+            : '—'}
         </span>
-        {workflow.status === 'active' && (
-          <button
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 14px',
-              borderRadius: '8px',
-              backgroundColor: '#1e1e3a',
-              border: '1px solid #2a2a4a',
-              color: '#8888aa',
-              fontSize: '12px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#6c5ce7';
-              e.currentTarget.style.color = '#fff';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#2a2a4a';
-              e.currentTarget.style.color = '#8888aa';
-            }}
+
+        <div className="flex items-center gap-2">
+          {/* This button previously had no onClick at all. */}
+          {workflow.status === 'active' ? (
+            <Button
+              size="sm"
+              icon={<Pause size={12} />}
+              disabled={busy}
+              onClick={() => onPause(workflow)}
+            >
+              Pause
+            </Button>
+          ) : workflow.status === 'paused' ? (
+            <Button
+              size="sm"
+              icon={<Play size={12} />}
+              disabled={busy}
+              onClick={() => onResume(workflow)}
+            >
+              Resume
+            </Button>
+          ) : null}
+
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={`Delete ${workflow.name}`}
+            disabled={busy}
+            onClick={() => onDelete(workflow)}
+            className="hover:bg-danger-soft hover:text-danger"
           >
-            <Pause size={12} />
-            Pause
-          </button>
-        )}
+            <Trash2 size={13} />
+          </Button>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 }
