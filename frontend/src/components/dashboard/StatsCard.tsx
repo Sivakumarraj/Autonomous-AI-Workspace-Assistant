@@ -1,8 +1,9 @@
 'use client';
 
 import { ClipboardList, Files, Settings2, Copy, Activity, FileCheck } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
-const iconMap: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
+const iconMap: Record<string, LucideIcon> = {
   ClipboardList,
   Files,
   Settings2,

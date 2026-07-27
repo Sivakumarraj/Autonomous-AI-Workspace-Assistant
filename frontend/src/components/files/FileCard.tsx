@@ -1,6 +1,7 @@
 'use client';
 
 import { FileText, FileSpreadsheet, File } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface FileCardProps {
   name: string;
@@ -10,7 +11,7 @@ interface FileCardProps {
   index: number;
 }
 
-const fileIconMap: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
+const fileIconMap: Record<string, LucideIcon> = {
   pdf: FileText,
   docx: FileText,
   csv: FileSpreadsheet,

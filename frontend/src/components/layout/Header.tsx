@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, Bell, Sun, User } from 'lucide-react';
+import { Search, Bell, Sun } from 'lucide-react';
 
 export default function Header() {
   return (

@@ -1,27 +1,21 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { Search, Plus, Info, CheckCircle } from 'lucide-react';
-
-interface LogEntry {
-  id: number;
-  event: string;
-  category: string;
-  level: string;
-  created_at: string;
-}
+import { useState, useEffect, useCallback } from 'react';
+import { Search, CheckCircle } from 'lucide-react';
+import { apiGet } from '@/services/api';
+import type { LogEntry } from '@/types/workflow';
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  const loadLogs = () => {
-    fetch('http://127.0.0.1:8000/logs/')
-      .then(r => r.json())
-      .then(d => setLogs(d.logs))
-      .catch(console.error);
-  };
+  const loadLogs = useCallback(() => {
+    apiGet<{ logs: LogEntry[] }>('/logs/')
+      .then((d) => { setLogs(d.logs); setError(null); })
+      .catch((err) => setError(err.message));
+  }, []);
 
-  useEffect(() => { loadLogs(); }, []);
+  useEffect(() => { loadLogs(); }, [loadLogs]);
 
   const filtered = logs.filter(l =>
     l.event.toLowerCase().includes(filter.toLowerCase()) ||
@@ -41,6 +35,11 @@ export default function LogsPage() {
           ↻ Refresh
         </button>
       </div>
+      {error && (
+        <div style={{ padding: '12px 16px', marginBottom: '20px', borderRadius: '10px', backgroundColor: 'rgba(244, 67, 54, 0.12)', border: '1px solid rgba(244, 67, 54, 0.3)', color: '#f44336', fontSize: '14px' }}>
+          Could not load logs: {error}
+        </div>
+      )}
       <div style={{ backgroundColor: '#141428', borderRadius: '12px', border: '1px solid #1e1e3a', overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #1e1e3a' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '8px', backgroundColor: '#1a1a35', border: '1px solid #1e1e3a', width: '340px' }}>

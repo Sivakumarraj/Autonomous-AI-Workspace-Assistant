@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { MessageSquare, Upload, GitBranch, Activity } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { QUICK_ACTIONS } from '@/utils/constants';
 
-const iconMap: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
+const iconMap: Record<string, LucideIcon> = {
   MessageSquare,
   Upload,
   GitBranch,

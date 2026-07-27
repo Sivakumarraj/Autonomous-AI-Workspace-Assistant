@@ -79,7 +79,7 @@ export default function WorkflowCard({ workflow, index }: WorkflowCardProps) {
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
           <span style={{ fontSize: '12px', color: '#8888aa' }}>Progress</span>
           <span style={{ fontSize: '12px', color: '#8888aa' }}>
-            {workflow.completedSteps} / {workflow.totalSteps} steps ({workflow.progress}%)
+            {workflow.steps_done} / {workflow.steps_total} steps ({workflow.progress}%)
           </span>
         </div>
         <div
@@ -105,7 +105,9 @@ export default function WorkflowCard({ workflow, index }: WorkflowCardProps) {
 
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '12px', color: '#555577' }}>Started: {workflow.startedAt}</span>
+        <span style={{ fontSize: '12px', color: '#555577' }}>
+          Started: {workflow.created_at ? new Date(workflow.created_at).toLocaleDateString() : '-'}
+        </span>
         {workflow.status === 'active' && (
           <button
             style={{

@@ -1,26 +1,18 @@
-const API_URL = "http://127.0.0.1:8000";
+import { apiDelete, apiGet, apiPost } from './api';
+import type { MemoryEntry } from '@/types/workflow';
 
-export async function getMemories() {
-  try {
-    const response = await fetch(`${API_URL}/memory/`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+export async function getMemories(): Promise<MemoryEntry[]> {
+  return apiGet<MemoryEntry[]>('/memory/');
+}
 
-    if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
-    }
+export async function createMemory(data: {
+  category: string;
+  content: string;
+  source?: string;
+}): Promise<MemoryEntry> {
+  return apiPost<MemoryEntry>('/memory/', data);
+}
 
-    const data = await response.json();
-
-    console.log("Memory API Response:", data);
-
-    return data;
-
-  } catch (error) {
-    console.error("Failed to fetch memories:", error);
-    return [];
-  }
+export async function deleteMemory(id: number): Promise<void> {
+  await apiDelete(`/memory/${id}`);
 }

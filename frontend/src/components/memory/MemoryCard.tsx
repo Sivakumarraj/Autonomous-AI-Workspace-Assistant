@@ -47,7 +47,7 @@ export default function MemoryCard({ entry, index }: MemoryCardProps) {
       </p>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '12px', color: '#555577' }}>Source: {entry.source}</span>
-        <span style={{ fontSize: '12px', color: '#555577' }}>{entry.createdAt}</span>
+        <span style={{ fontSize: '12px', color: '#555577' }}>{entry.created_at ? new Date(entry.created_at).toLocaleDateString() : ''}</span>
       </div>
     </div>
   );

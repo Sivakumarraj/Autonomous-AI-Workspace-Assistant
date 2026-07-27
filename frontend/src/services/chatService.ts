@@ -1,13 +1,12 @@
-export async function sendMessage(message: string) {
-  const response = await fetch("http://127.0.0.1:8000/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      message,
-    }),
-  });
+import { apiPost } from './api';
 
-  return response.json();
+export interface ChatResponse {
+  response: string;
+  retrieved_chunks: string[];
+  mode: 'general' | 'rag' | 'workflow';
+  memory_saved?: string | null;
+}
+
+export async function sendMessage(message: string): Promise<ChatResponse> {
+  return apiPost<ChatResponse>('/chat', { message });
 }

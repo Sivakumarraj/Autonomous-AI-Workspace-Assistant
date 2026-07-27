@@ -3,18 +3,28 @@ import { useState, useEffect } from 'react';
 import StatsCard from '@/components/dashboard/StatsCard';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
 import QuickActions from '@/components/dashboard/QuickActions';
+import { apiGet } from '@/services/api';
+
+interface DashboardStats {
+  total_files: number;
+  memory_entries: number;
+  logs_today: number;
+  active_workflows: number;
+  conversations: number;
+  completed_tasks: number;
+}
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<DashboardStats>({
     total_files: 0, memory_entries: 0, logs_today: 0,
     active_workflows: 0, conversations: 0, completed_tasks: 0
   });
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/dashboard/stats')
-      .then(r => r.json())
-      .then(setStats)
-      .catch(console.error);
+    apiGet<DashboardStats>('/dashboard/stats')
+      .then((data) => { setStats(data); setError(null); })
+      .catch((err) => setError(err.message));
   }, []);
 
   const STATS = [
@@ -32,7 +42,12 @@ export default function DashboardPage() {
       <p style={{ fontSize: '15px', color: '#666688', marginBottom: '28px' }}>
         Welcome back. Here&apos;s an overview of your workspace.
       </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+      {error && (
+        <div style={{ padding: '12px 16px', marginBottom: '20px', borderRadius: '10px', backgroundColor: 'rgba(244, 67, 54, 0.12)', border: '1px solid rgba(244, 67, 54, 0.3)', color: '#f44336', fontSize: '14px' }}>
+          Could not reach the backend: {error}
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         {STATS.map((stat, i) => (
           <StatsCard key={stat.label} label={stat.label} value={stat.value} description={stat.description} icon={stat.icon} index={i} />
         ))}
